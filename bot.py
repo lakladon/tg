@@ -36,7 +36,7 @@ class GameStates(StatesGroup):
     business_management = State()
     improvements = State()
     competitors = State()
-
+    adding_business = State()
 # Клавиатуры
 def get_main_menu_keyboard():
     """Главное меню игры"""
@@ -44,6 +44,7 @@ def get_main_menu_keyboard():
     keyboard.add(InlineKeyboardButton(text="💰 Мой профиль", callback_data="profile"))
     keyboard.add(InlineKeyboardButton(text="🏢 Мои бизнесы", callback_data="businesses"))
     keyboard.add(InlineKeyboardButton(text="🛠 Улучшения", callback_data="improvements"))
+    keyboard.add(InlineKeyboardButton(text="➕ Новый бизнес", callback_data="add_business"))
     keyboard.add(InlineKeyboardButton(text="📊 Рейтинг", callback_data="rating"))
     keyboard.add(InlineKeyboardButton(text="🎯 Достижения", callback_data="achievements"))
     keyboard.add(InlineKeyboardButton(text="🎲 Случайное событие", callback_data="random_event"))
@@ -66,6 +67,18 @@ def get_business_choice_keyboard():
     # По одной кнопке в строке для читабельности
     keyboard.adjust(1)
     return keyboard.as_markup()
+
+@router.callback_query(F.data == "add_business")
+async def add_business_flow(callback: types.CallbackQuery, state: FSMContext):
+    """Старт добавления второго бизнеса"""
+    user_id = callback.from_user.id
+    businesses = db.get_player_businesses(user_id)
+    if len(businesses) >= 2:
+        await callback.answer("У вас уже 2 бизнеса", show_alert=True)
+        return
+    await state.set_state(GameStates.choosing_business)
+    await callback.message.edit_text("Выберите тип нового бизнеса:", reply_markup=get_business_choice_keyboard())
+
 
 def get_business_management_keyboard(business_id: int):
     """Управление конкретным бизнесом"""
@@ -249,6 +262,11 @@ async def process_business_name(message: types.Message, state: FSMContext):
     user_id = message.from_user.id
     player = db.get_player(user_id)
     
+    existing = db.get_player_businesses(user_id)
+    if len(existing) >= 2:
+        await message.answer("Лимит: у вас уже 2 бизнеса.", reply_markup=get_main_menu_keyboard())
+        await state.set_state(GameStates.main_menu)
+        return
     # Создаем бизнес
     business_id = db.add_business(
         user_id, 
@@ -341,6 +359,9 @@ async def show_businesses(callback: types.CallbackQuery):
             callback_data=f"manage_{business['id']}"
         ))
     
+    # Кнопка добавления нового бизнеса (ограничение до 2)
+    if len(businesses) < 2:
+        keyboard.row(InlineKeyboardButton(text="➕ Добавить второй бизнес", callback_data="add_business"))
     keyboard.row(InlineKeyboardButton(text="🔙 Главное меню", callback_data="main_menu"))
     keyboard.adjust(1)
     
@@ -738,17 +759,26 @@ async def prod_start(callback: types.CallbackQuery):
 @router.callback_query(F.data.startswith("prod_collect_"))
 async def prod_collect(callback: types.CallbackQuery):
     prod_id = int(callback.data.split("_")[2])
-    info = db.collect_production(prod_id)
+    info = db.collect_production(prod_id, callback.from_user.id)
     if not info:
         await callback.answer("Не готово или не найдено", show_alert=True); return
     # Награда: денег за продукцию (простая формула)
-    reward = 0
+    base = 0
     if info['prod_type'] == 'IT':
-        reward = 20000
+        base = 20000
     elif info['prod_type'] == 'FARM':
-        reward = info['quantity'] * 50
+        base = info['quantity'] * 50
     elif info['prod_type'] == 'FACTORY':
-        reward = info['quantity'] * 120
+        base = info['quantity'] * 120
+          # Случайный множитель: логнормальное распределение с обрезкой и шансом отрицательного результата
+    import random, math
+    # 10% шанс провала: убыток 20-80% от базы
+    if random.random() < 0.10:
+        factor = -random.uniform(0.2, 0.8)
+    else:
+        # Успех: медиана около 1.0, хвосты до 5-10x редко
+        factor = min(10.0, max(0.2, random.lognormvariate(0.0, 0.6)))
+    reward = float(base) * factor
     # Узнаем владельца бизнеса
     # Упростим: по prod_id -> business_id уже есть в info
     # Найдем бизнес
@@ -759,8 +789,11 @@ async def prod_collect(callback: types.CallbackQuery):
     reward = float(reward)
     # Найдем владельца через все бизнесы игрока (ограничение: только для текущего пользователя)
     user_id = callback.from_user.id
-    db.update_player_balance(user_id, reward, 'production', f"Продажа {info['name']}")
-    await callback.message.edit_text(f"📦 Получено по продукции: +{reward:,.0f} ₽", reply_markup=get_main_menu_keyboard())
+    db.update_player_balance(user_id, reward, 'production', f"Операция по продукции: {info['name']}")
+    prefix = "+" if reward >= 0 else "-"
+    amount_str = f"{abs(reward):,.0f} ₽"
+    await callback.message.edit_text(f"📦 Результат продукции: {prefix}{amount_str}", reply_markup=get_main_menu_keyboard())
+    
 
 @router.callback_query(F.data.startswith("stats_"))
 async def show_stats(callback: types.CallbackQuery):
