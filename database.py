@@ -774,30 +774,45 @@ class GameDatabase:
             print(f"Ошибка set_production_status: {e}")
             return False
 
-    def collect_production(self, prod_id: int) -> Optional[Dict]:
+    def collect_production(self, prod_id: int, user_id_check: int) -> Optional[Dict]:
         try:
             conn = sqlite3.connect(self.db_path)
             cursor = conn.cursor()
-            cursor.execute('SELECT business_id, prod_type, name, version, status, ready_at, quantity, meta FROM productions WHERE id = ?', (prod_id,))
+            cursor.execute('''
+                SELECT p.business_id, p.prod_type, p.name, p.version, p.status, p.ready_at, p.quantity, p.meta, b.user_id
+                FROM productions p
+                JOIN businesses b ON b.id = p.business_id
+                WHERE p.id = ?
+            ''', (prod_id,))
             row = cursor.fetchone()
             if not row:
                 conn.close()
                 return None
-            business_id, prod_type, name, version, status, ready_at, quantity, meta = row
+            business_id, prod_type, name, version, status, ready_at, quantity, meta, user_id = row
+            # Проверка владельца
+            if user_id != user_id_check:
+                conn.close()
+                return None
+            # Помечаем как collected, но только если уже готово и ранее не было собрано
             # Помечаем как collected, но только если уже готово
             cursor.execute('''
                 UPDATE productions SET status = 'collected' 
                 WHERE id = ? AND datetime(ready_at) <= datetime('now') AND status != 'collected'
             ''', (prod_id,))
+            updated = cursor.rowcount
             conn.commit()
             conn.close()
+            if updated == 0:
+                # Не готово или уже собрано
+                return None
             return {
                 'business_id': business_id,
                 'prod_type': prod_type,
                 'name': name,
                 'version': version,
                 'quantity': quantity,
-                'meta': json.loads(meta or '{}')
+                'meta': json.loads(meta or '{}'),
+                'user_id': user_id  
             }
         except Exception as e:
             print(f"Ошибка collect_production: {e}")
