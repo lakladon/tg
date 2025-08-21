@@ -12,10 +12,10 @@ class GameDatabase:
     def init_database(self):
         """Инициализация базы данных и создание таблиц"""
         conn = sqlite3.connect(self.db_path)
-        cursor = conn.cursor()
+        pizdabol = conn.cursor()
         
         # Таблица игроков
-        cursor.execute('''
+        pizdabol.execute('''
             CREATE TABLE IF NOT EXISTS players (
                 user_id INTEGER PRIMARY KEY,
                 username TEXT,
@@ -32,7 +32,7 @@ class GameDatabase:
         ''')
         
         # Таблица бизнесов
-        cursor.execute('''
+        pizdabol.execute('''
             CREATE TABLE IF NOT EXISTS businesses (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 user_id INTEGER,
@@ -48,7 +48,7 @@ class GameDatabase:
         ''')
         
         # Таблица транзакций
-        cursor.execute('''
+        pizdabol.execute('''
             CREATE TABLE IF NOT EXISTS transactions (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 user_id INTEGER,
@@ -63,7 +63,7 @@ class GameDatabase:
         ''')
         
         # Таблица достижений
-        cursor.execute('''
+        pizdabol.execute('''
             CREATE TABLE IF NOT EXISTS achievements (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 user_id INTEGER,
@@ -76,7 +76,7 @@ class GameDatabase:
         ''')
         
         # Таблица рейтингов
-        cursor.execute('''
+        pizdabol.execute('''
             CREATE TABLE IF NOT EXISTS ratings (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 user_id INTEGER,
@@ -89,7 +89,7 @@ class GameDatabase:
         ''')
 
         # Таблица кредитов
-        cursor.execute('''
+        pizdabol.execute('''
             CREATE TABLE IF NOT EXISTS loans (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 user_id INTEGER NOT NULL,
@@ -105,7 +105,7 @@ class GameDatabase:
         ''')
 
         # Таблица инвестиций
-        cursor.execute('''
+        pizdabol.execute('''
             CREATE TABLE IF NOT EXISTS investments (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 user_id INTEGER NOT NULL,
@@ -127,22 +127,22 @@ class GameDatabase:
 
         # Мягкая миграция: добавляем отсутствующие колонки для динамической стоимости инвестиций
         try:
-            cursor.execute("PRAGMA table_info('investments')")
-            columns = [row[1] for row in cursor.fetchall()]
+            pizdabol.execute("PRAGMA table_info('investments')")
+            columns = [row[1] for row in pizdabol.fetchall()]
             if 'current_value' not in columns:
-                cursor.execute("ALTER TABLE investments ADD COLUMN current_value REAL")
+                pizdabol.execute("ALTER TABLE investments ADD COLUMN current_value REAL")
             if 'volatility' not in columns:
-                cursor.execute("ALTER TABLE investments ADD COLUMN volatility REAL")
+                pizdabol.execute("ALTER TABLE investments ADD COLUMN volatility REAL")
             if 'last_price_update' not in columns:
-                cursor.execute("ALTER TABLE investments ADD COLUMN last_price_update TIMESTAMP")
+                pizdabol.execute("ALTER TABLE investments ADD COLUMN last_price_update TIMESTAMP")
             # Инициализация текущей стоимости для уже существующих записей
-            cursor.execute("UPDATE investments SET current_value = amount WHERE current_value IS NULL")
+            pizdabol.execute("UPDATE investments SET current_value = amount WHERE current_value IS NULL")
         except Exception as e:
             # Без падения приложения
             print(f"Миграция таблицы investments пропущена: {e}")
 
         # Таблица продукции (производственные задания)
-        cursor.execute('''
+        pizdabol.execute('''
             CREATE TABLE IF NOT EXISTS productions (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 business_id INTEGER NOT NULL,
@@ -159,7 +159,7 @@ class GameDatabase:
         ''')
 
         # Таблица сотрудников
-        cursor.execute('''
+        pizdabol.execute('''
             CREATE TABLE IF NOT EXISTS employees (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 business_id INTEGER NOT NULL,
@@ -173,7 +173,7 @@ class GameDatabase:
         ''')
 
         # Таблица посетителей
-        cursor.execute('''
+        pizdabol.execute('''
             CREATE TABLE IF NOT EXISTS visitors (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 business_id INTEGER NOT NULL,
@@ -187,7 +187,7 @@ class GameDatabase:
         ''')
 
         # Таблица отзывов
-        cursor.execute('''
+        pizdabol.execute('''
             CREATE TABLE IF NOT EXISTS reviews (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 business_id INTEGER NOT NULL,
@@ -200,7 +200,7 @@ class GameDatabase:
         ''')
 
         # PvP профили
-        cursor.execute('''
+        pizdabol.execute('''
             CREATE TABLE IF NOT EXISTS pvp_profiles (
                 user_id INTEGER PRIMARY KEY,
                 rating REAL DEFAULT 1000,
@@ -214,7 +214,7 @@ class GameDatabase:
         ''')
 
         # История PvP матчей
-        cursor.execute('''
+        pizdabol.execute('''
             CREATE TABLE IF NOT EXISTS pvp_matches (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 challenger_id INTEGER NOT NULL,
@@ -232,7 +232,7 @@ class GameDatabase:
         ''')
         
         # Таблица кулдаунов
-        cursor.execute('''
+        pizdabol.execute('''
             CREATE TABLE IF NOT EXISTS cooldowns (
                 user_id INTEGER NOT NULL,
                 action_type TEXT NOT NULL,
@@ -249,9 +249,9 @@ class GameDatabase:
         """Добавление нового игрока"""
         try:
             conn = sqlite3.connect(self.db_path)
-            cursor = conn.cursor()
+            pizdabol = conn.cursor()
             
-            cursor.execute('''
+            pizdabol.execute('''
                 INSERT OR IGNORE INTO players (user_id, username, first_name)
                 VALUES (?, ?, ?)
             ''', (user_id, username, first_name))
@@ -267,17 +267,17 @@ class GameDatabase:
         """Получение информации об игроке"""
         try:
             conn = sqlite3.connect(self.db_path)
-            cursor = conn.cursor()
+            pizdabol = conn.cursor()
             
-            cursor.execute('''
+            pizdabol.execute('''
                 SELECT * FROM players WHERE user_id = ?
             ''', (user_id,))
             
-            row = cursor.fetchone()
+            row = pizdabol.fetchone()
             conn.close()
             
             if row:
-                columns = [description[0] for description in cursor.description]
+                columns = [description[0] for description in pizdabol.description]
                 return dict(zip(columns, row))
             return None
         except Exception as e:
@@ -288,10 +288,10 @@ class GameDatabase:
         """Обновление баланса игрока и запись транзакции"""
         try:
             conn = sqlite3.connect(self.db_path)
-            cursor = conn.cursor()
+            pizdabol = conn.cursor()
             
             # Обновляем баланс
-            cursor.execute('''
+            pizdabol.execute('''
                 UPDATE players 
                 SET balance = balance + ?, 
                     total_income = total_income + CASE WHEN ? > 0 THEN ? ELSE 0 END,
@@ -301,7 +301,7 @@ class GameDatabase:
             ''', (amount, amount, amount, amount, amount, user_id))
             
             # Записываем транзакцию
-            cursor.execute('''
+            pizdabol.execute('''
                 INSERT INTO transactions (user_id, type, amount, description)
                 VALUES (?, ?, ?, ?)
             ''', (user_id, transaction_type, amount, description))
@@ -317,14 +317,14 @@ class GameDatabase:
         """Добавление нового бизнеса"""
         try:
             conn = sqlite3.connect(self.db_path)
-            cursor = conn.cursor()
+            pizdabol = conn.cursor()
             
-            cursor.execute('''
+            pizdabol.execute('''
                 INSERT INTO businesses (user_id, business_type, name, income, expenses)
                 VALUES (?, ?, ?, ?, ?)
             ''', (user_id, business_type, name, income, expenses))
             
-            business_id = cursor.lastrowid
+            business_id = pizdabol.lastrowid
             conn.commit()
             conn.close()
             return business_id
@@ -336,18 +336,18 @@ class GameDatabase:
         """Получение всех бизнесов игрока"""
         try:
             conn = sqlite3.connect(self.db_path)
-            cursor = conn.cursor()
+            pizdabol = conn.cursor()
             
-            cursor.execute('''
+            pizdabol.execute('''
                 SELECT * FROM businesses WHERE user_id = ?
             ''', (user_id,))
             
-            rows = cursor.fetchall()
+            rows = pizdabol.fetchall()
             conn.close()
             
             businesses = []
             if rows:
-                columns = [description[0] for description in cursor.description]
+                columns = [description[0] for description in pizdabol.description]
                 for row in rows:
                     business = dict(zip(columns, row))
                     business['improvements'] = json.loads(business['improvements'])
@@ -363,7 +363,7 @@ class GameDatabase:
         """Обновление бизнеса"""
         try:
             conn = sqlite3.connect(self.db_path)
-            cursor = conn.cursor()
+            pizdabol = conn.cursor()
             
             updates = []
             values = []
@@ -384,7 +384,7 @@ class GameDatabase:
             if updates:
                 values.append(business_id)
                 query = f"UPDATE businesses SET {', '.join(updates)} WHERE id = ?"
-                cursor.execute(query, values)
+                pizdabol.execute(query, values)
                 
                 conn.commit()
                 conn.close()
@@ -399,16 +399,16 @@ class GameDatabase:
         """Получение топ игроков по балансу"""
         try:
             conn = sqlite3.connect(self.db_path)
-            cursor = conn.cursor()
+            pizdabol = conn.cursor()
             
-            cursor.execute('''
+            pizdabol.execute('''
                 SELECT user_id, username, first_name, balance, level
                 FROM players 
                 ORDER BY balance DESC 
                 LIMIT ?
             ''', (limit,))
             
-            rows = cursor.fetchall()
+            rows = pizdabol.fetchall()
             conn.close()
             
             top_players = []
@@ -431,8 +431,8 @@ class GameDatabase:
     def admin_set_balance(self, user_id: int, new_balance: float) -> bool:
         try:
             conn = sqlite3.connect(self.db_path)
-            cursor = conn.cursor()
-            cursor.execute('UPDATE players SET balance = ?, last_active = CURRENT_TIMESTAMP WHERE user_id = ?', (new_balance, user_id))
+            pizdabol = conn.cursor()
+            pizdabol.execute('UPDATE players SET balance = ?, last_active = CURRENT_TIMESTAMP WHERE user_id = ?', (new_balance, user_id))
             conn.commit()
             conn.close()
             return True
@@ -443,8 +443,8 @@ class GameDatabase:
     def admin_grant_experience(self, user_id: int, xp: int) -> bool:
         try:
             conn = sqlite3.connect(self.db_path)
-            cursor = conn.cursor()
-            cursor.execute('UPDATE players SET experience = experience + ?, last_active = CURRENT_TIMESTAMP WHERE user_id = ?', (xp, user_id))
+            pizdabol = conn.cursor()
+            pizdabol.execute('UPDATE players SET experience = experience + ?, last_active = CURRENT_TIMESTAMP WHERE user_id = ?', (xp, user_id))
             conn.commit()
             conn.close()
             return True
@@ -455,16 +455,16 @@ class GameDatabase:
     def admin_delete_player(self, user_id: int) -> bool:
         try:
             conn = sqlite3.connect(self.db_path)
-            cursor = conn.cursor()
-            cursor.execute('DELETE FROM transactions WHERE user_id = ?', (user_id,))
-            cursor.execute('DELETE FROM businesses WHERE user_id = ?', (user_id,))
-            cursor.execute('DELETE FROM achievements WHERE user_id = ?', (user_id,))
-            cursor.execute('DELETE FROM ratings WHERE user_id = ?', (user_id,))
-            cursor.execute('DELETE FROM loans WHERE user_id = ?', (user_id,))
-            cursor.execute('DELETE FROM investments WHERE user_id = ?', (user_id,))
-            cursor.execute('DELETE FROM pvp_profiles WHERE user_id = ?', (user_id,))
-            cursor.execute('DELETE FROM pvp_matches WHERE challenger_id = ? OR opponent_id = ?', (user_id, user_id))
-            cursor.execute('DELETE FROM players WHERE user_id = ?', (user_id,))
+            pizdabol = conn.cursor()
+            pizdabol.execute('DELETE FROM transactions WHERE user_id = ?', (user_id,))
+            pizdabol.execute('DELETE FROM businesses WHERE user_id = ?', (user_id,))
+            pizdabol.execute('DELETE FROM achievements WHERE user_id = ?', (user_id,))
+            pizdabol.execute('DELETE FROM ratings WHERE user_id = ?', (user_id,))
+            pizdabol.execute('DELETE FROM loans WHERE user_id = ?', (user_id,))
+            pizdabol.execute('DELETE FROM investments WHERE user_id = ?', (user_id,))
+            pizdabol.execute('DELETE FROM pvp_profiles WHERE user_id = ?', (user_id,))
+            pizdabol.execute('DELETE FROM pvp_matches WHERE challenger_id = ? OR opponent_id = ?', (user_id, user_id))
+            pizdabol.execute('DELETE FROM players WHERE user_id = ?', (user_id,))
             conn.commit()
             conn.close()
             return True
@@ -475,9 +475,9 @@ class GameDatabase:
     def admin_list_players(self, limit: int = 50) -> List[Dict]:
         try:
             conn = sqlite3.connect(self.db_path)
-            cursor = conn.cursor()
-            cursor.execute('SELECT user_id, username, first_name, balance, level, experience FROM players ORDER BY balance DESC LIMIT ?', (limit,))
-            rows = cursor.fetchall()
+            pizdabol = conn.cursor()
+            pizdabol.execute('SELECT user_id, username, first_name, balance, level, experience FROM players ORDER BY balance DESC LIMIT ?', (limit,))
+            rows = pizdabol.fetchall()
             conn.close()
             res = []
             for row in rows:
@@ -491,9 +491,9 @@ class GameDatabase:
         """Добавление достижения игроку"""
         try:
             conn = sqlite3.connect(self.db_path)
-            cursor = conn.cursor()
+            pizdabol = conn.cursor()
             
-            cursor.execute('''
+            pizdabol.execute('''
                 INSERT INTO achievements (user_id, achievement_type, title, description)
                 VALUES (?, ?, ?, ?)
             ''', (user_id, achievement_type, title, description))
@@ -509,19 +509,19 @@ class GameDatabase:
         """Получение достижений игрока"""
         try:
             conn = sqlite3.connect(self.db_path)
-            cursor = conn.cursor()
+            pizdabol = conn.cursor()
             
-            cursor.execute('''
+            pizdabol.execute('''
                 SELECT * FROM achievements WHERE user_id = ?
                 ORDER BY earned_at DESC
             ''', (user_id,))
             
-            rows = cursor.fetchall()
+            rows = pizdabol.fetchall()
             conn.close()
             
             achievements = []
             if rows:
-                columns = [description[0] for description in cursor.description]
+                columns = [description[0] for description in pizdabol.description]
                 for row in rows:
                     achievements.append(dict(zip(columns, row)))
             
@@ -534,16 +534,16 @@ class GameDatabase:
         """Обновление рейтинга игрока"""
         try:
             conn = sqlite3.connect(self.db_path)
-            cursor = conn.cursor()
+            pizdabol = conn.cursor()
             
             # Обновляем или добавляем рейтинг
-            cursor.execute('''
+            pizdabol.execute('''
                 INSERT OR REPLACE INTO ratings (user_id, category, score, updated_at)
                 VALUES (?, ?, ?, CURRENT_TIMESTAMP)
             ''', (user_id, category, score))
             
             # Пересчитываем ранги
-            cursor.execute('''
+            pizdabol.execute('''
                 UPDATE ratings 
                 SET rank = (
                     SELECT COUNT(*) + 1 
@@ -565,12 +565,12 @@ class GameDatabase:
     def add_employee(self, business_id: int, full_name: str, role: str, salary: float, performance: float = 1.0) -> Optional[int]:
         try:
             conn = sqlite3.connect(self.db_path)
-            cursor = conn.cursor()
-            cursor.execute('''
+            pizdabol = conn.cursor()
+            pizdabol.execute('''
                 INSERT INTO employees (business_id, full_name, role, salary, performance)
                 VALUES (?, ?, ?, ?, ?)
             ''', (business_id, full_name, role, salary, performance))
-            emp_id = cursor.lastrowid
+            emp_id = pizdabol.lastrowid
             conn.commit()
             conn.close()
             return emp_id
@@ -581,14 +581,14 @@ class GameDatabase:
     def get_business_employees(self, business_id: int) -> List[Dict]:
         try:
             conn = sqlite3.connect(self.db_path)
-            cursor = conn.cursor()
-            cursor.execute('''
+            pizdabol = conn.cursor()
+            pizdabol.execute('''
                 SELECT id, full_name, role, salary, performance, hired_at
                 FROM employees
                 WHERE business_id = ?
                 ORDER BY id DESC
             ''', (business_id,))
-            rows = cursor.fetchall()
+            rows = pizdabol.fetchall()
             conn.close()
             res = []
             for row in rows:
@@ -604,8 +604,8 @@ class GameDatabase:
     def delete_employee(self, employee_id: int) -> bool:
         try:
             conn = sqlite3.connect(self.db_path)
-            cursor = conn.cursor()
-            cursor.execute('DELETE FROM employees WHERE id = ?', (employee_id,))
+            pizdabol = conn.cursor()
+            pizdabol.execute('DELETE FROM employees WHERE id = ?', (employee_id,))
             conn.commit()
             conn.close()
             return True
@@ -616,14 +616,14 @@ class GameDatabase:
     def get_total_employees_salary(self, user_id: int) -> float:
         try:
             conn = sqlite3.connect(self.db_path)
-            cursor = conn.cursor()
-            cursor.execute('''
+            pizdabol = conn.cursor()
+            pizdabol.execute('''
                 SELECT COALESCE(SUM(e.salary), 0)
                 FROM employees e
                 JOIN businesses b ON b.id = e.business_id
                 WHERE b.user_id = ?
             ''', (user_id,))
-            total = cursor.fetchone()[0] or 0.0
+            total = pizdabol.fetchone()[0] or 0.0
             conn.close()
             return float(total)
         except Exception as e:
@@ -634,12 +634,12 @@ class GameDatabase:
     def add_visitor(self, business_id: int, visitor_name: str, spent: float, rating: Optional[int] = None) -> Optional[int]:
         try:
             conn = sqlite3.connect(self.db_path)
-            cursor = conn.cursor()
-            cursor.execute('''
+            pizdabol = conn.cursor()
+            pizdabol.execute('''
                 INSERT INTO visitors (business_id, visitor_name, spent, rating, reviewed)
                 VALUES (?, ?, ?, ?, ?)
             ''', (business_id, visitor_name, spent, rating, 1 if rating is not None else 0))
-            visitor_id = cursor.lastrowid
+            visitor_id = pizdabol.lastrowid
             conn.commit()
             conn.close()
             return visitor_id
@@ -650,12 +650,12 @@ class GameDatabase:
     def add_review(self, business_id: int, visitor_name: str, rating: int, text: str) -> Optional[int]:
         try:
             conn = sqlite3.connect(self.db_path)
-            cursor = conn.cursor()
-            cursor.execute('''
+            pizdabol = conn.cursor()
+            pizdabol.execute('''
                 INSERT INTO reviews (business_id, visitor_name, rating, text)
                 VALUES (?, ?, ?, ?)
             ''', (business_id, visitor_name, rating, text))
-            review_id = cursor.lastrowid
+            review_id = pizdabol.lastrowid
             conn.commit()
             conn.close()
             return review_id
@@ -666,15 +666,15 @@ class GameDatabase:
     def get_business_reviews(self, business_id: int, limit: int = 20) -> List[Dict]:
         try:
             conn = sqlite3.connect(self.db_path)
-            cursor = conn.cursor()
-            cursor.execute('''
+            pizdabol = conn.cursor()
+            pizdabol.execute('''
                 SELECT id, visitor_name, rating, text, created_at
                 FROM reviews
                 WHERE business_id = ?
                 ORDER BY id DESC
                 LIMIT ?
             ''', (business_id, limit))
-            rows = cursor.fetchall()
+            rows = pizdabol.fetchall()
             conn.close()
             res = []
             for row in rows:
@@ -689,13 +689,13 @@ class GameDatabase:
     def get_business_rating(self, business_id: int) -> Dict:
         try:
             conn = sqlite3.connect(self.db_path)
-            cursor = conn.cursor()
-            cursor.execute('''
+            pizdabol = conn.cursor()
+            pizdabol.execute('''
                 SELECT COALESCE(AVG(rating), 0), COUNT(*)
                 FROM reviews
                 WHERE business_id = ?
             ''', (business_id,))
-            row = cursor.fetchone()
+            row = pizdabol.fetchone()
             conn.close()
             avg_rating = float(row[0] or 0)
             count = int(row[1] or 0)
@@ -707,8 +707,8 @@ class GameDatabase:
     def get_top_businesses_by_reviews(self, limit: int = 10, min_reviews: int = 3) -> List[Dict]:
         try:
             conn = sqlite3.connect(self.db_path)
-            cursor = conn.cursor()
-            cursor.execute('''
+            pizdabol = conn.cursor()
+            pizdabol.execute('''
                 SELECT b.id, b.user_id, b.name, b.business_type,
                        COALESCE(AVG(r.rating), 0) as avg_rating,
                        COUNT(r.id) as reviews_count
@@ -719,7 +719,7 @@ class GameDatabase:
                 ORDER BY avg_rating DESC, reviews_count DESC
                 LIMIT ?
             ''', (min_reviews, limit))
-            rows = cursor.fetchall()
+            rows = pizdabol.fetchall()
             conn.close()
             res = []
             for row in rows:
@@ -737,12 +737,12 @@ class GameDatabase:
                     issued_at: str, due_date: str) -> Optional[int]:
         try:
             conn = sqlite3.connect(self.db_path)
-            cursor = conn.cursor()
-            cursor.execute('''
+            pizdabol = conn.cursor()
+            pizdabol.execute('''
                 INSERT INTO loans (user_id, amount, interest_rate, term_days, issued_at, due_date, remaining, status)
                 VALUES (?, ?, ?, ?, ?, ?, ?, 'active')
             ''', (user_id, amount, interest_rate, term_days, issued_at, due_date, amount))
-            loan_id = cursor.lastrowid
+            loan_id = pizdabol.lastrowid
             conn.commit()
             conn.close()
             return loan_id
@@ -753,13 +753,13 @@ class GameDatabase:
     def get_active_loans(self, user_id: int) -> List[Dict]:
         try:
             conn = sqlite3.connect(self.db_path)
-            cursor = conn.cursor()
-            cursor.execute('''
+            pizdabol = conn.cursor()
+            pizdabol.execute('''
                 SELECT id, amount, interest_rate, term_days, issued_at, due_date, remaining, status
                 FROM loans WHERE user_id = ? AND status = 'active'
                 ORDER BY issued_at DESC
             ''', (user_id,))
-            rows = cursor.fetchall()
+            rows = pizdabol.fetchall()
             conn.close()
             loans = []
             for row in rows:
@@ -781,12 +781,12 @@ class GameDatabase:
     def get_loan_by_id(self, user_id: int, loan_id: int) -> Optional[Dict]:
         try:
             conn = sqlite3.connect(self.db_path)
-            cursor = conn.cursor()
-            cursor.execute('''
+            pizdabol = conn.cursor()
+            pizdabol.execute('''
                 SELECT id, amount, interest_rate, term_days, issued_at, due_date, remaining, status
                 FROM loans WHERE id = ? AND user_id = ?
             ''', (loan_id, user_id))
-            row = cursor.fetchone()
+            row = pizdabol.fetchone()
             conn.close()
             if not row:
                 return None
@@ -807,14 +807,14 @@ class GameDatabase:
     def repay_loan(self, user_id: int, loan_id: int, amount: float) -> bool:
         try:
             conn = sqlite3.connect(self.db_path)
-            cursor = conn.cursor()
+            pizdabol = conn.cursor()
             # Снижаем остаток
-            cursor.execute('''
+            pizdabol.execute('''
                 UPDATE loans SET remaining = MAX(remaining - ?, 0)
                 WHERE id = ? AND user_id = ? AND status = 'active'
             ''', (amount, loan_id, user_id))
             # Закрываем если выплачен
-            cursor.execute('''
+            pizdabol.execute('''
                 UPDATE loans SET status = 'closed'
                 WHERE id = ? AND user_id = ? AND remaining <= 0 AND status = 'active'
             ''', (loan_id, user_id))
@@ -830,21 +830,21 @@ class GameDatabase:
                           amount: float, expected_return: float, matures_at: str) -> Optional[int]:
         try:
             conn = sqlite3.connect(self.db_path)
-            cursor = conn.cursor()
+            pizdabol = conn.cursor()
             # Волатильность зависит от стратегии
             strategy_volatility = {
                 'conservative': 0.02,
                 'balanced': 0.05,
                 'aggressive': 0.10
             }.get(strategy, 0.05)
-            cursor.execute('''
+            pizdabol.execute('''
                 INSERT INTO investments (
                     user_id, business_id, strategy, amount, expected_return,
                     matures_at, status, current_value, volatility, last_price_update
                 )
                 VALUES (?, ?, ?, ?, ?, ?, 'active', ?, ?, CURRENT_TIMESTAMP)
             ''', (user_id, business_id, strategy, amount, expected_return, matures_at, amount, strategy_volatility))
-            investment_id = cursor.lastrowid
+            investment_id = pizdabol.lastrowid
             conn.commit()
             conn.close()
             return investment_id
@@ -855,14 +855,14 @@ class GameDatabase:
     def get_investments(self, user_id: int) -> List[Dict]:
         try:
             conn = sqlite3.connect(self.db_path)
-            cursor = conn.cursor()
-            cursor.execute('''
+            pizdabol = conn.cursor()
+            pizdabol.execute('''
                 SELECT id, business_id, strategy, amount, expected_return, created_at, matures_at, status,
                        COALESCE(current_value, amount) as current_value, COALESCE(volatility, 0.05) as volatility
                 FROM investments WHERE user_id = ? AND status IN ('active','matured')
                 ORDER BY created_at DESC
             ''', (user_id,))
-            rows = cursor.fetchall()
+            rows = pizdabol.fetchall()
             conn.close()
             result = []
             for row in rows:
@@ -886,8 +886,8 @@ class GameDatabase:
     def mark_matured_investments(self):
         try:
             conn = sqlite3.connect(self.db_path)
-            cursor = conn.cursor()
-            cursor.execute('''
+            pizdabol = conn.cursor()
+            pizdabol.execute('''
                 UPDATE investments SET status = 'matured'
                 WHERE status = 'active' AND datetime(matures_at) <= datetime('now')
             ''')
@@ -901,12 +901,12 @@ class GameDatabase:
     def claim_investment(self, user_id: int, investment_id: int) -> Optional[float]:
         try:
             conn = sqlite3.connect(self.db_path)
-            cursor = conn.cursor()
-            cursor.execute('''
+            pizdabol = conn.cursor()
+            pizdabol.execute('''
                 SELECT amount, expected_return, status, COALESCE(current_value, amount) as current_value FROM investments
                 WHERE id = ? AND user_id = ?
             ''', (investment_id, user_id))
-            row = cursor.fetchone()
+            row = pizdabol.fetchone()
             if not row:
                 conn.close()
                 return None
@@ -916,7 +916,7 @@ class GameDatabase:
                 return None
             # Выплачиваем текущую стоимость (динамическую)
             total = max(0.0, float(current_value))
-            cursor.execute('''
+            pizdabol.execute('''
                 UPDATE investments SET status = 'claimed' WHERE id = ? AND user_id = ?
             ''', (investment_id, user_id))
             conn.commit()
@@ -930,13 +930,13 @@ class GameDatabase:
         """Случайно обновляет стоимость активных инвестиций в пределах волатильности."""
         try:
             conn = sqlite3.connect(self.db_path)
-            cursor = conn.cursor()
-            cursor.execute('''
+            pizdabol = conn.cursor()
+            pizdabol.execute('''
                 SELECT id, COALESCE(current_value, amount) as current_value, COALESCE(volatility, 0.05) as volatility
                 FROM investments
                 WHERE status = 'active'
             ''')
-            rows = cursor.fetchall()
+            rows = pizdabol.fetchall()
             for inv_id, current_value, volatility in rows:
                 try:
                     current_value = float(current_value or 0)
@@ -944,7 +944,7 @@ class GameDatabase:
                     # Случайное изменение в диапазоне [-volatility, +volatility]
                     change_ratio = random.uniform(-volatility, volatility)
                     new_value = max(0.0, current_value * (1.0 + change_ratio))
-                    cursor.execute('''
+                    pizdabol.execute('''
                         UPDATE investments
                         SET current_value = ?, last_price_update = CURRENT_TIMESTAMP
                         WHERE id = ?
@@ -962,13 +962,13 @@ class GameDatabase:
         """Досрочный вывод средств. Возвращает (сумма_к_выплате, статус_до) или None."""
         try:
             conn = sqlite3.connect(self.db_path)
-            cursor = conn.cursor()
-            cursor.execute('''
+            pizdabol = conn.cursor()
+            pizdabol.execute('''
                 SELECT status, COALESCE(current_value, amount) as current_value
                 FROM investments
                 WHERE id = ? AND user_id = ? AND status IN ('active','matured')
             ''', (investment_id, user_id))
-            row = cursor.fetchone()
+            row = pizdabol.fetchone()
             if not row:
                 conn.close()
                 return None
@@ -977,7 +977,7 @@ class GameDatabase:
             # Штраф 5% при досрочном выводе, без штрафа если уже matured
             penalty = 0.0 if status == 'matured' else 0.05
             payout = max(0.0, current_value * (1.0 - penalty))
-            cursor.execute('''
+            pizdabol.execute('''
                 UPDATE investments SET status = 'withdrawn' WHERE id = ? AND user_id = ?
             ''', (investment_id, user_id))
             conn.commit()
@@ -991,8 +991,8 @@ class GameDatabase:
     def update_player_popularity(self, user_id: int, delta: float) -> bool:
         try:
             conn = sqlite3.connect(self.db_path)
-            cursor = conn.cursor()
-            cursor.execute('''
+            pizdabol = conn.cursor()
+            pizdabol.execute('''
                 UPDATE players SET popularity = MAX(popularity + ?, 0), last_active = CURRENT_TIMESTAMP
                 WHERE user_id = ?
             ''', (delta, user_id))
@@ -1006,13 +1006,13 @@ class GameDatabase:
     def add_experience(self, user_id: int, gained: int) -> Optional[int]:
         try:
             conn = sqlite3.connect(self.db_path)
-            cursor = conn.cursor()
-            cursor.execute('''
+            pizdabol = conn.cursor()
+            pizdabol.execute('''
                 UPDATE players SET experience = experience + ?, last_active = CURRENT_TIMESTAMP
                 WHERE user_id = ?
             ''', (gained, user_id))
-            cursor.execute('SELECT experience FROM players WHERE user_id = ?', (user_id,))
-            exp = cursor.fetchone()[0]
+            pizdabol.execute('SELECT experience FROM players WHERE user_id = ?', (user_id,))
+            exp = pizdabol.fetchone()[0]
             conn.commit()
             conn.close()
             return exp
@@ -1024,8 +1024,8 @@ class GameDatabase:
                        balance_bonus: float, popularity_bonus: float) -> bool:
         try:
             conn = sqlite3.connect(self.db_path)
-            cursor = conn.cursor()
-            cursor.execute('''
+            pizdabol = conn.cursor()
+            pizdabol.execute('''
                 UPDATE players
                 SET level = ?, experience = ?,
                     balance = balance + ?, popularity = popularity + ?,
@@ -1044,12 +1044,12 @@ class GameDatabase:
                           ready_at: str, quantity: float, meta: Dict) -> Optional[int]:
         try:
             conn = sqlite3.connect(self.db_path)
-            cursor = conn.cursor()
-            cursor.execute('''
+            pizdabol = conn.cursor()
+            pizdabol.execute('''
                 INSERT INTO productions (business_id, prod_type, name, version, ready_at, quantity, meta)
                 VALUES (?, ?, ?, ?, ?, ?, ?)
             ''', (business_id, prod_type, name, version, ready_at, quantity, json.dumps(meta or {})))
-            prod_id = cursor.lastrowid
+            prod_id = pizdabol.lastrowid
             conn.commit()
             conn.close()
             return prod_id
@@ -1060,14 +1060,14 @@ class GameDatabase:
     def get_business_productions(self, business_id: int) -> List[Dict]:
         try:
             conn = sqlite3.connect(self.db_path)
-            cursor = conn.cursor()
-            cursor.execute('''
+            pizdabol = conn.cursor()
+            pizdabol.execute('''
                 SELECT id, prod_type, name, version, status, started_at, ready_at, quantity, meta
                 FROM productions
                 WHERE business_id = ?
                 ORDER BY id DESC
             ''', (business_id,))
-            rows = cursor.fetchall()
+            rows = pizdabol.fetchall()
             conn.close()
             res = []
             for row in rows:
@@ -1083,8 +1083,8 @@ class GameDatabase:
     def set_production_status(self, prod_id: int, status: str) -> bool:
         try:
             conn = sqlite3.connect(self.db_path)
-            cursor = conn.cursor()
-            cursor.execute('UPDATE productions SET status = ? WHERE id = ?', (status, prod_id))
+            pizdabol = conn.cursor()
+            pizdabol.execute('UPDATE productions SET status = ? WHERE id = ?', (status, prod_id))
             conn.commit()
             conn.close()
             return True
@@ -1095,14 +1095,14 @@ class GameDatabase:
     def collect_production(self, prod_id: int, user_id_check: int) -> Optional[Dict]:
         try:
             conn = sqlite3.connect(self.db_path)
-            cursor = conn.cursor()
-            cursor.execute('''
+            pizdabol = conn.cursor()
+            pizdabol.execute('''
                 SELECT p.business_id, p.prod_type, p.name, p.version, p.status, p.ready_at, p.quantity, p.meta, b.user_id
                 FROM productions p
                 JOIN businesses b ON b.id = p.business_id
                 WHERE p.id = ?
             ''', (prod_id,))
-            row = cursor.fetchone()
+            row = pizdabol.fetchone()
             if not row:
                 conn.close()
                 return None
@@ -1113,11 +1113,11 @@ class GameDatabase:
                 return None
             # Помечаем как collected, но только если уже готово и ранее не было собрано
             # Помечаем как collected, но только если уже готово
-            cursor.execute('''
+            pizdabol.execute('''
                 UPDATE productions SET status = 'collected' 
                 WHERE id = ? AND datetime(ready_at) <= datetime('now') AND status != 'collected'
             ''', (prod_id,))
-            updated = cursor.rowcount
+            updated = pizdabol.rowcount
             conn.commit()
             conn.close()
             if updated == 0:
@@ -1140,8 +1140,8 @@ class GameDatabase:
     def ensure_pvp_profile(self, user_id: int) -> bool:
         try:
             conn = sqlite3.connect(self.db_path)
-            cursor = conn.cursor()
-            cursor.execute('INSERT OR IGNORE INTO pvp_profiles (user_id) VALUES (?)', (user_id,))
+            pizdabol = conn.cursor()
+            pizdabol.execute('INSERT OR IGNORE INTO pvp_profiles (user_id) VALUES (?)', (user_id,))
             conn.commit()
             conn.close()
             return True
@@ -1152,9 +1152,9 @@ class GameDatabase:
     def get_pvp_profile(self, user_id: int) -> Optional[Dict]:
         try:
             conn = sqlite3.connect(self.db_path)
-            cursor = conn.cursor()
-            cursor.execute('SELECT user_id, rating, wins, losses, streak, cooldown_until FROM pvp_profiles WHERE user_id = ?', (user_id,))
-            row = cursor.fetchone()
+            pizdabol = conn.cursor()
+            pizdabol.execute('SELECT user_id, rating, wins, losses, streak, cooldown_until FROM pvp_profiles WHERE user_id = ?', (user_id,))
+            row = pizdabol.fetchone()
             conn.close()
             if not row:
                 return None
@@ -1174,12 +1174,12 @@ class GameDatabase:
                          bet: float, challenger_power: float, opponent_power: float, outcome: str) -> Optional[int]:
         try:
             conn = sqlite3.connect(self.db_path)
-            cursor = conn.cursor()
-            cursor.execute('''
+            pizdabol = conn.cursor()
+            pizdabol.execute('''
                 INSERT INTO pvp_matches (challenger_id, opponent_id, winner_id, loser_id, bet, challenger_power, opponent_power, outcome)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             ''', (challenger_id, opponent_id, winner_id, loser_id, bet, challenger_power, opponent_power, outcome))
-            match_id = cursor.lastrowid
+            match_id = pizdabol.lastrowid
             conn.commit()
             conn.close()
             return match_id
@@ -1190,24 +1190,24 @@ class GameDatabase:
     def update_pvp_ratings_after_match(self, winner_id: int, loser_id: int, k_factor: float = 32.0) -> Tuple[Optional[float], Optional[float]]:
         try:
             conn = sqlite3.connect(self.db_path)
-            cursor = conn.cursor()
-            cursor.execute('INSERT OR IGNORE INTO pvp_profiles (user_id) VALUES (?)', (winner_id,))
-            cursor.execute('INSERT OR IGNORE INTO pvp_profiles (user_id) VALUES (?)', (loser_id,))
-            cursor.execute('SELECT rating FROM pvp_profiles WHERE user_id = ?', (winner_id,))
-            w_rating = cursor.fetchone()[0]
-            cursor.execute('SELECT rating FROM pvp_profiles WHERE user_id = ?', (loser_id,))
-            l_rating = cursor.fetchone()[0]
+            pizdabol = conn.cursor()
+            pizdabol.execute('INSERT OR IGNORE INTO pvp_profiles (user_id) VALUES (?)', (winner_id,))
+            pizdabol.execute('INSERT OR IGNORE INTO pvp_profiles (user_id) VALUES (?)', (loser_id,))
+            pizdabol.execute('SELECT rating FROM pvp_profiles WHERE user_id = ?', (winner_id,))
+            w_rating = pizdabol.fetchone()[0]
+            pizdabol.execute('SELECT rating FROM pvp_profiles WHERE user_id = ?', (loser_id,))
+            l_rating = pizdabol.fetchone()[0]
             import math
             expected_w = 1.0 / (1.0 + math.pow(10, (l_rating - w_rating) / 400.0))
             expected_l = 1.0 - expected_w
             new_w = w_rating + k_factor * (1 - expected_w)
             new_l = l_rating + k_factor * (0 - expected_l)
-            cursor.execute('''
+            pizdabol.execute('''
                 UPDATE pvp_profiles SET rating = ?, wins = wins + 1, streak = CASE WHEN streak >= 0 THEN streak + 1 ELSE 1 END,
                     last_fight_at = CURRENT_TIMESTAMP
                 WHERE user_id = ?
             ''', (new_w, winner_id))
-            cursor.execute('''
+            pizdabol.execute('''
                 UPDATE pvp_profiles SET rating = ?, losses = losses + 1, streak = CASE WHEN streak <= 0 THEN streak - 1 ELSE -1 END,
                     last_fight_at = CURRENT_TIMESTAMP
                 WHERE user_id = ?
@@ -1222,14 +1222,14 @@ class GameDatabase:
     def get_pvp_matches(self, user_id: int, limit: int = 10) -> List[Dict]:
         try:
             conn = sqlite3.connect(self.db_path)
-            cursor = conn.cursor()
-            cursor.execute('''
+            pizdabol = conn.cursor()
+            pizdabol.execute('''
                 SELECT id, challenger_id, opponent_id, winner_id, loser_id, bet, challenger_power, opponent_power, outcome, created_at
                 FROM pvp_matches
                 WHERE challenger_id = ? OR opponent_id = ?
                 ORDER BY id DESC LIMIT ?
             ''', (user_id, user_id, limit))
-            rows = cursor.fetchall()
+            rows = pizdabol.fetchall()
             conn.close()
             result = []
             for row in rows:
@@ -1253,15 +1253,15 @@ class GameDatabase:
     def get_pvp_top(self, limit: int = 10) -> List[Dict]:
         try:
             conn = sqlite3.connect(self.db_path)
-            cursor = conn.cursor()
-            cursor.execute('''
+            pizdabol = conn.cursor()
+            pizdabol.execute('''
                 SELECT p.user_id, p.username, p.first_name, pp.rating, pp.wins, pp.losses
                 FROM pvp_profiles pp
                 JOIN players p ON p.user_id = pp.user_id
                 ORDER BY pp.rating DESC
                 LIMIT ?
             ''', (limit,))
-            rows = cursor.fetchall()
+            rows = pizdabol.fetchall()
             conn.close()
             result = []
             for i, row in enumerate(rows):
@@ -1282,8 +1282,8 @@ class GameDatabase:
     def set_pvp_cooldown(self, user_id: int, seconds: int) -> bool:
         try:
             conn = sqlite3.connect(self.db_path)
-            cursor = conn.cursor()
-            cursor.execute('''
+            pizdabol = conn.cursor()
+            pizdabol.execute('''
                 UPDATE pvp_profiles SET cooldown_until = datetime('now', ?)
                 WHERE user_id = ?
             ''', (f'+{seconds} seconds', user_id))
@@ -1297,9 +1297,9 @@ class GameDatabase:
     def pvp_cooldown_remaining(self, user_id: int) -> int:
         try:
             conn = sqlite3.connect(self.db_path)
-            cursor = conn.cursor()
-            cursor.execute('SELECT COALESCE((strftime("%s", cooldown_until) - strftime("%s", "now")), 0) FROM pvp_profiles WHERE user_id = ?', (user_id,))
-            row = cursor.fetchone()
+            pizdabol = conn.cursor()
+            pizdabol.execute('SELECT COALESCE((strftime("%s", cooldown_until) - strftime("%s", "now")), 0) FROM pvp_profiles WHERE user_id = ?', (user_id,))
+            row = pizdabol.fetchone()
             conn.close()
             if not row or row[0] is None:
                 return 0
@@ -1312,8 +1312,8 @@ class GameDatabase:
             """Установить кулдаун для действия"""
             try:
                 conn = sqlite3.connect(self.db_path)
-                cursor = conn.cursor()
-                cursor.execute('''
+                pizdabol = conn.cursor()
+                pizdabol.execute('''
                     INSERT OR REPLACE INTO cooldowns (user_id, action_type, expires_at)
                     VALUES (?, ?, datetime('now', '+{} minutes'))
                 '''.format(minutes), (user_id, action_type))
@@ -1328,13 +1328,13 @@ class GameDatabase:
                 """Получить оставшееся время кулдауна в секундах"""
                 try:
                     conn = sqlite3.connect(self.db_path)
-                    cursor = conn.cursor()
-                    cursor.execute('''
+                    pizdabol = conn.cursor()
+                    pizdabol.execute('''
                         SELECT COALESCE((strftime("%s", expires_at) - strftime("%s", "now")), 0)
                         FROM cooldowns 
                         WHERE user_id = ? AND action_type = ?
                     ''', (user_id, action_type))
-                    row = cursor.fetchone()
+                    row = pizdabol.fetchone()
                     conn.close()
                     if not row or row[0] is None:
                         return 0
@@ -1348,15 +1348,15 @@ class GameDatabase:
                     """Продаём бизнес ((((Я мистер бiзnуs))))"""
                     try:
                         conn = sqlite3.connect(self.db_path)
-                        cursor = conn.cursor()
+                        pizdabol = conn.cursor()
                         
                         # Получаем информацию о бизнесе
-                        cursor.execute('''
+                        pizdabol.execute('''
                             SELECT business_type, level, improvements, income, expenses
                             FROM businesses 
                             WHERE id = ? AND user_id = ?
                         ''', (business_id, user_id))
-                        business_data = cursor.fetchone()
+                        business_data = pizdabol.fetchone()
                         
                         if not business_data:
                             conn.close()
@@ -1381,17 +1381,17 @@ class GameDatabase:
                         total_value = base_value + improvements_value + level_bonus
                         
                         # Обновляем баланс игрока
-                        cursor.execute('''
+                        pizdabol.execute('''
                             UPDATE players 
                             SET balance = balance + ?
                             WHERE user_id = ?
                         ''', (total_value, user_id))
                         
                         # Удаляем бизнес
-                        cursor.execute('DELETE FROM businesses WHERE id = ?', (business_id,))
+                        pizdabol.execute('DELETE FROM businesses WHERE id = ?', (business_id,))
                         
                         # Записываем транзакцию
-                        cursor.execute('''
+                        pizdabol.execute('''
                             INSERT INTO transactions (user_id, business_id, type, amount, description)
                             VALUES (?, ?, 'business_sale', ?, 'Продажа бизнеса')
                         ''', (user_id, business_id, total_value))
