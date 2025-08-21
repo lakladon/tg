@@ -200,6 +200,36 @@ class GameDatabase:
                 FOREIGN KEY (user_id) REFERENCES players (user_id)
             )
         ''')
+
+        # Таблица сотрудников
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS employees (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                business_id INTEGER NOT NULL,
+                user_id INTEGER NOT NULL,
+                full_name TEXT NOT NULL,
+                position TEXT NOT NULL,
+                salary REAL NOT NULL,
+                hired_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (business_id) REFERENCES businesses (id),
+                FOREIGN KEY (user_id) REFERENCES players (user_id)
+            )
+        ''')
+
+        # Таблица отзывов (посетителей)
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS reviews (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                business_id INTEGER NOT NULL,
+                user_id INTEGER NOT NULL,
+                visitor_name TEXT NOT NULL,
+                rating INTEGER NOT NULL CHECK(rating BETWEEN 1 AND 5),
+                review_text TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (business_id) REFERENCES businesses (id),
+                FOREIGN KEY (user_id) REFERENCES players (user_id)
+            )
+        ''')
         
         conn.commit()
         conn.close()
@@ -302,16 +332,37 @@ class GameDatabase:
             ''', (user_id,))
             
             rows = cursor.fetchall()
-            conn.close()
+            # Подготавливаем словари по результатам
+            columns = [description[0] for description in cursor.description]
+
+            # Подгружаем месячные оклады сотрудников (в сутки) для каждого бизнеса
+            business_ids = [row[0] for row in rows] if rows else []
+            staff_salary_by_business = {}
+            if business_ids:
+                placeholders = ','.join(['?'] * len(business_ids))
+                try:
+                    cursor.execute(f'''
+                        SELECT business_id, COALESCE(SUM(salary), 0)
+                        FROM employees
+                        WHERE business_id IN ({placeholders})
+                        GROUP BY business_id
+                    ''', business_ids)
+                    for bid, total_salary in cursor.fetchall():
+                        # Оклад в день: считаем, что salary указан в день
+                        staff_salary_by_business[int(bid)] = float(total_salary or 0.0)
+                except Exception:
+                    staff_salary_by_business = {}
             
             businesses = []
             if rows:
-                columns = [description[0] for description in cursor.description]
                 for row in rows:
                     business = dict(zip(columns, row))
                     business['improvements'] = json.loads(business['improvements'])
+                    # Добавляем расходы на персонал в день (если есть)
+                    business['staff_salary'] = staff_salary_by_business.get(int(business['id']), 0.0)
                     businesses.append(business)
-            
+
+            conn.close()
             return businesses
         except Exception as e:
             print(f"Ошибка при получении бизнесов: {e}")
@@ -1196,3 +1247,139 @@ class GameDatabase:
                     except Exception as e:
                         print(f"Ошибка sell_business: {e}")
                         return {'success': False, 'message': 'Ошибка при продаже бизнеса'}
+
+    # ------------------- Сотрудники -------------------
+    def add_employee(self, user_id: int, business_id: int, full_name: str, position: str, salary: float) -> Optional[int]:
+        try:
+            conn = sqlite3.connect(self.db_path)
+            cursor = conn.cursor()
+            cursor.execute('''
+                INSERT INTO employees (business_id, user_id, full_name, position, salary)
+                VALUES (?, ?, ?, ?, ?)
+            ''', (business_id, user_id, full_name, position, salary))
+            emp_id = cursor.lastrowid
+            conn.commit()
+            conn.close()
+            return emp_id
+        except Exception as e:
+            print(f"Ошибка add_employee: {e}")
+            return None
+
+    def get_employees(self, business_id: int) -> List[Dict]:
+        try:
+            conn = sqlite3.connect(self.db_path)
+            cursor = conn.cursor()
+            cursor.execute('''
+                SELECT id, full_name, position, salary, hired_at
+                FROM employees WHERE business_id = ?
+                ORDER BY hired_at DESC
+            ''', (business_id,))
+            rows = cursor.fetchall()
+            conn.close()
+            res = []
+            for row in rows:
+                res.append({'id': row[0], 'full_name': row[1], 'position': row[2], 'salary': row[3], 'hired_at': row[4]})
+            return res
+        except Exception as e:
+            print(f"Ошибка get_employees: {e}")
+            return []
+
+    def fire_employee(self, business_id: int, employee_id: int) -> bool:
+        try:
+            conn = sqlite3.connect(self.db_path)
+            cursor = conn.cursor()
+            cursor.execute('DELETE FROM employees WHERE id = ? AND business_id = ?', (employee_id, business_id))
+            affected = cursor.rowcount
+            conn.commit()
+            conn.close()
+            return affected > 0
+        except Exception as e:
+            print(f"Ошибка fire_employee: {e}")
+            return False
+
+    # ------------------- Отзывы/посетители -------------------
+    def add_review(self, business_id: int, user_id: int, visitor_name: str, rating: int, review_text: str) -> Optional[int]:
+        try:
+            conn = sqlite3.connect(self.db_path)
+            cursor = conn.cursor()
+            cursor.execute('''
+                INSERT INTO reviews (business_id, user_id, visitor_name, rating, review_text)
+                VALUES (?, ?, ?, ?, ?)
+            ''', (business_id, user_id, visitor_name, rating, review_text))
+            review_id = cursor.lastrowid
+            conn.commit()
+            conn.close()
+            return review_id
+        except Exception as e:
+            print(f"Ошибка add_review: {e}")
+            return None
+
+    def get_business_reviews(self, business_id: int, limit: int = 10) -> List[Dict]:
+        try:
+            conn = sqlite3.connect(self.db_path)
+            cursor = conn.cursor()
+            cursor.execute('''
+                SELECT id, visitor_name, rating, review_text, created_at
+                FROM reviews
+                WHERE business_id = ?
+                ORDER BY id DESC
+                LIMIT ?
+            ''', (business_id, limit))
+            rows = cursor.fetchall()
+            conn.close()
+            res = []
+            for row in rows:
+                res.append({
+                    'id': row[0], 'visitor_name': row[1], 'rating': row[2], 'review_text': row[3], 'created_at': row[4]
+                })
+            return res
+        except Exception as e:
+            print(f"Ошибка get_business_reviews: {e}")
+            return []
+
+    def get_business_rating(self, business_id: int) -> Dict:
+        try:
+            conn = sqlite3.connect(self.db_path)
+            cursor = conn.cursor()
+            cursor.execute('''
+                SELECT COALESCE(AVG(rating), 0), COUNT(*) FROM reviews WHERE business_id = ?
+            ''', (business_id,))
+            row = cursor.fetchone()
+            conn.close()
+            avg_rating = float(row[0] or 0.0)
+            count = int(row[1] or 0)
+            return {'avg_rating': avg_rating, 'reviews_count': count}
+        except Exception as e:
+            print(f"Ошибка get_business_rating: {e}")
+            return {'avg_rating': 0.0, 'reviews_count': 0}
+
+    def get_top_businesses_by_rating(self, limit: int = 5) -> List[Dict]:
+        try:
+            conn = sqlite3.connect(self.db_path)
+            cursor = conn.cursor()
+            cursor.execute('''
+                SELECT b.id, b.user_id, b.name, b.business_type, COALESCE(AVG(r.rating), 0) AS avg_rating, COUNT(r.id) AS cnt
+                FROM businesses b
+                LEFT JOIN reviews r ON r.business_id = b.id
+                GROUP BY b.id
+                HAVING cnt > 0
+                ORDER BY avg_rating DESC, cnt DESC
+                LIMIT ?
+            ''', (limit,))
+            rows = cursor.fetchall()
+            conn.close()
+            res = []
+            for i, row in enumerate(rows):
+                res.append({
+                    'rank': i + 1,
+                    'business_id': row[0],
+                    'user_id': row[1],
+                    'name': row[2],
+                    'business_type': row[3],
+                    'avg_rating': float(row[4] or 0.0),
+                    'reviews_count': int(row[5] or 0)
+                })
+            return res
+        except Exception as e:
+            print(f"Ошибка get_top_businesses_by_rating: {e}")
+            return []

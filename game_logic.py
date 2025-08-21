@@ -33,7 +33,11 @@ class GameLogic:
                     if 'expense_boost' in self.improvements[improvement]:
                         total_boost += self.improvements[improvement]['expense_boost']
         
-        return base_expenses * total_boost * DAILY_EXPENSE_MULTIPLIER
+        # База расходов с учетом множителей
+        boosted = base_expenses * total_boost * DAILY_EXPENSE_MULTIPLIER
+        # Добавляем фиксированные расходы на персонал, если есть
+        staff_salary = float(business.get('staff_salary', 0.0) or 0.0)
+        return boosted + staff_salary
     
     def get_random_event(self, player_level: int = 1) -> Optional[Dict]:
         """Получение случайного события"""

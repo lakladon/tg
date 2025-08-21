@@ -86,6 +86,8 @@ def get_business_management_keyboard(business_id: int):
     keyboard.add(InlineKeyboardButton(text="📊 Статистика", callback_data=f"stats_{business_id}"))
     keyboard.add(InlineKeyboardButton(text="🛠 Улучшить", callback_data=f"improve_{business_id}"))
     keyboard.add(InlineKeyboardButton(text="📦 Продукция", callback_data=f"prod_menu_{business_id}"))
+    keyboard.add(InlineKeyboardButton(text="👥 Персонал", callback_data=f"staff_{business_id}"))
+    keyboard.add(InlineKeyboardButton(text="⭐ Отзывы", callback_data=f"reviews_{business_id}"))
     keyboard.add(InlineKeyboardButton(text="💰 Продать", callback_data=f"sell_{business_id}"))
     keyboard.row(InlineKeyboardButton(text="🔙 К списку", callback_data="businesses"))
     return keyboard.as_markup()
@@ -1001,9 +1003,139 @@ async def show_rating(callback: types.CallbackQuery):
         rating_text += f"{medal} {username}{biz_part}\n"
         rating_text += f"💰 {p['balance']:,.0f} ₽ | ⭐ Уровень {p['level']}\n\n"
 
+    # Топ бизнесов по отзывам
+    try:
+        top_biz = db.get_top_businesses_by_rating(5)
+    except Exception:
+        top_biz = []
+    if top_biz:
+        rating_text += "\n<b>⭐ Топ бизнесов по отзывам:</b>\n\n"
+        for row in top_biz:
+            btype = BUSINESS_TYPES.get(row['business_type'], {'emoji': '🏢', 'name': 'Бизнес'})
+            rating_text += f"{row['rank']}. {btype['emoji']} {html.escape(row['name'])} — ⭐ {row['avg_rating']:.2f} ({row['reviews_count']})\n"
+
     keyboard = InlineKeyboardBuilder()
     keyboard.add(InlineKeyboardButton(text="🔙 Главное меню", callback_data="main_menu"))
     await callback.message.edit_text(rating_text, reply_markup=keyboard.as_markup(), parse_mode="HTML")
+
+# ---------------- Персонал ----------------
+@router.callback_query(F.data.startswith("staff_"))
+async def staff_menu(callback: types.CallbackQuery):
+    business_id = int(callback.data.split("_")[1])
+    user_id = callback.from_user.id
+    businesses = db.get_player_businesses(user_id)
+    business = next((b for b in businesses if b['id'] == business_id), None)
+    if not business:
+        await callback.answer("Бизнес не найден!", show_alert=True); return
+    staff = db.get_employees(business_id)
+    total_salary = sum(e['salary'] for e in staff)
+    text = f"👥 Персонал — {business['name']}\n\n"
+    if staff:
+        for e in staff:
+            text += f"#{e['id']} {e['full_name']} — {e['position']} ({e['salary']:,.0f} ₽/д)\n"
+    else:
+        text += "Пока сотрудников нет\n"
+    text += f"\n💸 Всего зарплат: {total_salary:,.0f} ₽/д\n\nВыберите действие:"
+    kb = InlineKeyboardBuilder()
+    # Предустановленные должности по типу
+    btype = business['business_type']
+    presets = {
+        'coffee_shop': [("Бариста", 3000), ("Менеджер", 5000)],
+        'restaurant': [("Повар", 4000), ("Официант", 2500)],
+        'factory': [("Рабочий", 3500), ("Техник", 4500)],
+        'it_startup': [("Разработчик", 7000), ("Тестировщик", 4000)],
+        'farm': [("Фермер", 3000), ("Агроном", 4500)]
+    }.get(btype, [("Сотрудник", 3000)])
+    for pos, sal in presets:
+        kb.add(InlineKeyboardButton(text=f"Нанять: {pos} ({sal} ₽/д)", callback_data=f"hire_{business_id}_{sal}_{pos}"))
+    for e in staff:
+        kb.add(InlineKeyboardButton(text=f"Уволить #{e['id']} {e['full_name']}", callback_data=f"fire_{business_id}_{e['id']}"))
+    kb.row(InlineKeyboardButton(text="🔙 К бизнесу", callback_data=f"manage_{business_id}"))
+    kb.adjust(1)
+    await callback.message.edit_text(text, reply_markup=kb.as_markup())
+
+@router.callback_query(F.data.startswith("hire_"))
+async def hire_employee(callback: types.CallbackQuery):
+    parts = callback.data.split("_")
+    business_id = int(parts[1])
+    salary = float(parts[2])
+    position = "_".join(parts[3:])
+    user_id = callback.from_user.id
+    # Генерация ФИО
+    full_name = advanced.generate_russian_full_name()
+    emp_id = db.add_employee(user_id, business_id, full_name, position, salary)
+    if emp_id:
+        await callback.answer("Сотрудник нанят")
+        await staff_menu(callback)
+    else:
+        await callback.answer("Ошибка найма", show_alert=True)
+
+@router.callback_query(F.data.startswith("fire_"))
+async def fire_employee(callback: types.CallbackQuery):
+    parts = callback.data.split("_")
+    business_id = int(parts[1])
+    employee_id = int(parts[2])
+    ok = db.fire_employee(business_id, employee_id)
+    if ok:
+        await callback.answer("Сотрудник уволен")
+        await staff_menu(callback)
+    else:
+        await callback.answer("Не удалось уволить", show_alert=True)
+
+# ---------------- Отзывы ----------------
+@router.callback_query(F.data.startswith("reviews_"))
+async def reviews_menu(callback: types.CallbackQuery):
+    business_id = int(callback.data.split("_")[1])
+    user_id = callback.from_user.id
+    businesses = db.get_player_businesses(user_id)
+    business = next((b for b in businesses if b['id'] == business_id), None)
+    if not business:
+        await callback.answer("Бизнес не найден!", show_alert=True); return
+    rating = db.get_business_rating(business_id)
+    reviews = db.get_business_reviews(business_id, 10)
+    text = f"⭐ Отзывы — {business['name']}\nСредняя оценка: {rating['avg_rating']:.2f} (#{rating['reviews_count']})\n\n"
+    if reviews:
+        for r in reviews:
+            stars = '⭐' * int(r['rating'])
+            name = html.escape(r['visitor_name'])
+            rv = html.escape(r['review_text'] or '')
+            text += f"{stars} — {name}: {rv}\n"
+    else:
+        text += "Пока отзывов нет\n"
+    kb = InlineKeyboardBuilder()
+    kb.add(InlineKeyboardButton(text="Сгенерировать посетителей", callback_data=f"gen_visitors_{business_id}"))
+    kb.row(InlineKeyboardButton(text="🔙 К бизнесу", callback_data=f"manage_{business_id}"))
+    kb.adjust(1)
+    await callback.message.edit_text(text, reply_markup=kb.as_markup(), parse_mode="HTML")
+
+@router.callback_query(F.data.startswith("gen_visitors_"))
+async def gen_visitors(callback: types.CallbackQuery):
+    business_id = int(callback.data.split("_")[2])
+    user_id = callback.from_user.id
+    # Найдем бизнес для типа
+    businesses = db.get_player_businesses(user_id)
+    business = next((b for b in businesses if b['id'] == business_id), None)
+    if not business:
+        await callback.answer("Бизнес не найден!", show_alert=True); return
+    # Сгенерируем 3-7 посетителей
+    count = random.randint(3, 7)
+    good_count = 0
+    for _ in range(count):
+        rating = max(1, min(5, int(random.gauss(4, 1))))
+        if rating >= 4:
+            good_count += 1
+        fio = advanced.generate_russian_full_name()
+        text = advanced.generate_review_text(business['business_type'], rating)
+        db.add_review(business_id, user_id, fio, rating, text)
+    # Немного скорректируем популярность за хорошие отзывы
+    try:
+        delta = (good_count - (count - good_count)) * 0.02
+        if abs(delta) > 0:
+            db.update_player_popularity(user_id, delta)
+    except Exception:
+        pass
+    await callback.answer(f"Создано отзывов: {count}")
+    await reviews_menu(callback)
 
 @router.callback_query(F.data == "achievements")
 async def show_achievements(callback: types.CallbackQuery):

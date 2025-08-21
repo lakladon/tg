@@ -22,6 +22,43 @@ class AdvancedGameFeatures:
             'loss': -0.05,   # -5% от собственного капитала
             'draw': 0.02     # 2% от ставки
         }
+
+        # Списки для генерации ФИО и отзывов
+        self.ru_first_names_male = [
+            'Алексей','Иван','Дмитрий','Сергей','Андрей','Никита','Егор','Павел','Михаил','Владимир'
+        ]
+        self.ru_first_names_female = [
+            'Анна','Мария','Екатерина','Ольга','Юлия','Татьяна','Наталья','Виктория','Елена','Светлана'
+        ]
+        self.ru_last_names = [
+            'Иванов','Смирнов','Кузнецов','Попов','Васильев','Петров','Соколов','Михайлов','Новиков','Федоров'
+        ]
+        self.ru_middle_names_male = [
+            'Алексеевич','Иванович','Дмитриевич','Сергеевич','Андреевич','Никитич','Егорович','Павлович','Михайлович','Владимирович'
+        ]
+        self.ru_middle_names_female = [
+            'Алексеевна','Ивановна','Дмитриевна','Сергеевна','Андреевна','Никитична','Егоровна','Павловна','Михайловна','Владимировна'
+        ]
+
+        self.review_templates_positive = [
+            'Отличное место! Обязательно вернусь снова.',
+            'Сервис на высоте, все очень понравилось!',
+            'Качество и атмосфера — супер!',
+            'Все быстро и вкусно/качественно. Рекомендую!',
+            'Пять звезд без сомнений.'
+        ]
+        self.review_templates_neutral = [
+            'В целом неплохо, есть что улучшить.',
+            'Обычный опыт, без восторгов.',
+            'Нормально, но хотелось бы быстрее/дешевле.',
+            'Средне, но можно дать второй шанс.'
+        ]
+        self.review_templates_negative = [
+            'Не понравилось, сервис подвел.',
+            'Качество оставляет желать лучшего.',
+            'Долго и дорого, не рекомендую.',
+            'Разочарован, ожидал большего.'
+        ]
     
     def calculate_loan_eligibility(self, player: Dict, loan_amount: float) -> Dict:
         """Расчет возможности получения кредита"""
@@ -172,6 +209,42 @@ class AdvancedGameFeatures:
             'investment': investment,
             'potential': investment_potential
         }
+
+    # ---------------- Генераторы ФИО и отзывов ----------------
+    def generate_russian_full_name(self, gender: Optional[str] = None) -> str:
+        """Генерация случайного русского ФИО (gender: 'male'|'female'|None)"""
+        import random
+        if gender not in ('male','female'):
+            gender = random.choice(['male','female'])
+        if gender == 'male':
+            first = random.choice(self.ru_first_names_male)
+            middle = random.choice(self.ru_middle_names_male)
+        else:
+            first = random.choice(self.ru_first_names_female)
+            middle = random.choice(self.ru_middle_names_female)
+        last = random.choice(self.ru_last_names)
+        # Простейшее согласование фамилии для женского рода (очень упрощенно)
+        if gender == 'female' and not last.endswith('а'):
+            last = last + 'а'
+        return f"{last} {first} {middle}"
+
+    def generate_review_text(self, business_type: str, rating: int) -> str:
+        """Генерация текста отзыва на основе типа бизнеса и оценки 1-5"""
+        import random
+        if rating >= 4:
+            base = random.choice(self.review_templates_positive)
+        elif rating == 3:
+            base = random.choice(self.review_templates_neutral)
+        else:
+            base = random.choice(self.review_templates_negative)
+        type_hint = {
+            'coffee_shop': 'кофе/десерты',
+            'restaurant': 'кухня/обслуживание',
+            'factory': 'качество продукции',
+            'it_startup': 'сервис/приложение',
+            'farm': 'свежесть продуктов'
+        }.get(business_type, 'сервис')
+        return f"{base} (отзыв о {type_hint})."
     
     def calculate_pvp_outcome(self, player1: Dict, player2: Dict, bet_amount: float) -> Dict:
         """Расчет результата PvP сражения"""
