@@ -921,7 +921,8 @@ async def show_improvements(callback: types.CallbackQuery):
     
     for improvement_id, improvement_info in IMPROVEMENTS.items():
         can_afford = game_logic.can_afford_improvement(player['balance'], improvement_id)
-        already_applied = improvement_id in business['improvements']
+        # 'staff' не является одноразовым улучшением: всегда доступно (если хватает средств)
+        already_applied = (improvement_id in business['improvements']) if improvement_id != 'staff' else False
         
         status = "✅ Применено" if already_applied else "💰 Доступно" if can_afford else "❌ Недоступно"
         improvements_text += f"\n{improvement_info['name']} ({improvement_info['cost']:,} ₽)\n"
@@ -948,6 +949,25 @@ async def buy_improvement(callback: types.CallbackQuery):
     
     if not business:
         await callback.answer("Бизнес не найден!")
+        return
+    
+    # Особая логика для найма сотрудника через меню улучшений
+    if improvement_id == 'staff':
+        if not game_logic.can_afford_improvement(player['balance'], improvement_id):
+            await callback.answer("Недостаточно средств!")
+            return
+        # Создаем сотрудника с разнообразными ролями, а не только менеджером
+        name = advanced.generate_full_name()
+        role = random.choice(["Официант", "Бариста", "Менеджер", "Разработчик", "Рабочий", "Кассир"]) 
+        salary = random.randint(1500, 6000)
+        perf = round(random.uniform(0.8, 1.3), 2)
+        db.add_employee(business_id, name, role, float(salary), float(perf))
+        # Списываем стоимость "улучшения" (найма)
+        db.update_player_balance(user_id, -IMPROVEMENTS[improvement_id]['cost'], "improvement", f"Найм сотрудника: {name} ({role})")
+        await callback.answer("Сотрудник нанят!")
+        # Покажем меню сотрудников для наглядности связки
+        callback.data = f"emp_menu_{business_id}"
+        await emp_menu(callback)
         return
     
     if improvement_id in business['improvements']:
