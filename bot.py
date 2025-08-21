@@ -1068,16 +1068,42 @@ async def emp_fire(callback: types.CallbackQuery):
 @router.callback_query(F.data.startswith("vis_menu_"))
 async def vis_menu(callback: types.CallbackQuery):
     business_id = int(callback.data.split("_")[2])
+    user_id = callback.from_user.id
+    
+    # Проверяем кулдаун для отображения статуса
+    cooldown_remaining = db.get_cooldown_remaining(user_id, "attract_visitors")
+    
     keyboard = InlineKeyboardBuilder()
-    keyboard.add(InlineKeyboardButton(text="🎲 Сымитировать поток", callback_data=f"vis_sim_{business_id}"))
+    if cooldown_remaining > 0:
+        minutes = cooldown_remaining // 60
+        seconds = cooldown_remaining % 60
+        button_text = f"⏰ Поток ({minutes}м {seconds}с)"
+        keyboard.add(InlineKeyboardButton(text=button_text, callback_data=f"vis_sim_{business_id}"))
+    else:
+        keyboard.add(InlineKeyboardButton(text="🎲 Привлечь посетителей", callback_data=f"vis_sim_{business_id}"))
+    
     keyboard.row(InlineKeyboardButton(text="🔙 Назад", callback_data=f"manage_{business_id}"))
-    await callback.message.edit_text("🧑‍🤝‍🧑 Посетители: сгенерируйте новых и собирайте отзывы.", reply_markup=keyboard.as_markup())
+    
+    message_text = "🧑‍🤝‍🧑 Посетители: привлекайте новых клиентов.\n\n💡 Внимание: расходы на маркетинг могут превысить доход!"
+    await callback.message.edit_text(message_text, reply_markup=keyboard.as_markup())
 
 @router.callback_query(F.data.startswith("vis_sim_"))
 async def vis_sim(callback: types.CallbackQuery):
     business_id = int(callback.data.split("_")[2])
-    # Найдем бизнес для типа
     user_id = callback.from_user.id
+    
+    # Проверяем кулдаун
+    cooldown_remaining = db.get_cooldown_remaining(user_id, "attract_visitors")
+    if cooldown_remaining > 0:
+        minutes = cooldown_remaining // 60
+        seconds = cooldown_remaining % 60
+        await callback.answer(
+            f"⏰ Привлечение посетителей доступно через {minutes}м {seconds}с", 
+            show_alert=True
+        )
+        return
+    
+    # Найдем бизнес для типа
     businesses = db.get_player_businesses(user_id)
     business = next((b for b in businesses if b['id'] == business_id), None)
     if not business:
@@ -1092,12 +1118,28 @@ async def vis_sim(callback: types.CallbackQuery):
         if v['review']:
             db.add_review(business_id, v['name'], int(v['review']['rating']), v['review']['text'])
             reviews_created += 1
-    if income_delta:
-        db.update_player_balance(user_id, income_delta, "visitors", f"Поток посетителей в бизнесе {business['name']}")
-    await callback.message.edit_text(
-        f"✅ Посетителей: {len(visitors)}\n💵 Доход: +{income_delta:,.0f} ₽\n⭐ Новых отзывов: {reviews_created}",
-        reply_markup=get_business_management_keyboard(business_id)
-    )
+    
+    # Сбалансированная награда: уменьшаем доход и добавляем возможность расходов
+    balanced_income = income_delta * 0.6  # Снижаем доход на 40%
+    
+    # Добавляем случайные расходы (маркетинг, реклама) с риском убытка
+    marketing_cost = random.randint(int(balanced_income * 0.3), int(balanced_income * 1.3))
+    final_income = balanced_income - marketing_cost
+    
+    # Устанавливаем кулдаун на 15 минут
+    db.set_cooldown(user_id, "attract_visitors", 15)
+    
+    if final_income > 0:
+        db.update_player_balance(user_id, final_income, "visitors", f"Привлечение посетителей в {business['name']}")
+        await callback.message.edit_text(
+            f"✅ Посетителей: {len(visitors)}\n💵 Доход: +{final_income:,.0f} ₽\n💸 Расходы на маркетинг: -{marketing_cost:,.0f} ₽\n⭐ Новых отзывов: {reviews_created}\n⏰ Следующее привлечение через 15 минут",
+            reply_markup=get_business_management_keyboard(business_id)
+        )
+    else:
+        await callback.message.edit_text(
+            f"✅ Посетителей: {len(visitors)}\n💸 Убыток: {final_income:,.0f} ₽ (высокие расходы на маркетинг)\n⭐ Новых отзывов: {reviews_created}\n⏰ Следующее привлечение через 15 минут",
+            reply_markup=get_business_management_keyboard(business_id)
+        )
 
 @router.callback_query(F.data.startswith("rev_menu_"))
 async def rev_menu(callback: types.CallbackQuery):
