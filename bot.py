@@ -524,22 +524,30 @@ async def handle_text_input(message: types.Message, state: FSMContext):
 @router.callback_query(F.data == "investments")
 async def investments_menu(callback: types.CallbackQuery):
     user_id = callback.from_user.id
+    # Обновим статусы и текущие цены
     db.mark_matured_investments()
+    try:
+        db.update_investment_prices()
+    except Exception:
+        pass
     inv = db.get_investments(user_id)
     text = "💼 Инвестиции\n\n"
     if inv:
         for i in inv:
-            text += (f"#{i['id']}: {i['amount']:,.0f} ₽ → {i['expected_return']:,.0f} ₽ | "+
+            current_val = i.get('current_value', i['amount'])
+            text += (f"#{i['id']}: вложено {i['amount']:,.0f} ₽ | текущая {current_val:,.0f} ₽ | "+
                      f"статус {i['status']} до {i['matures_at'][:10]}\n")
     else:
         text += "Активных инвестиций нет\n"
     text += "\nВыберите действие:"
     keyboard = InlineKeyboardBuilder()
     keyboard.add(InlineKeyboardButton(text="Вложить 20 000 ₽ (сбаланс.)", callback_data="inv_take_balanced_20000"))
-    # Кнопки для получения по готовым инвестициям
+    # Кнопки для получения и вывода
     for i in inv:
         if i['status'] == 'matured':
             keyboard.add(InlineKeyboardButton(text=f"Забрать по #{i['id']}", callback_data=f"inv_claim_{i['id']}"))
+        if i['status'] in ('active','matured'):
+            keyboard.add(InlineKeyboardButton(text=f"Вывести по #{i['id']}", callback_data=f"inv_withdraw_{i['id']}"))
     keyboard.row(InlineKeyboardButton(text="🔙 Главное меню", callback_data="main_menu"))
     keyboard.adjust(1)
     await callback.message.edit_text(text, reply_markup=keyboard.as_markup())
@@ -576,6 +584,27 @@ async def inv_claim_quick(callback: types.CallbackQuery):
         await callback.answer("Инвестиция не готова", show_alert=True)
         return
     db.update_player_balance(user_id, amount, "investment_income", f"Доход по инвестиции #{inv_id}")
+    await investments_menu(callback)
+
+@router.callback_query(F.data.startswith("inv_withdraw_"))
+async def inv_withdraw(callback: types.CallbackQuery):
+    user_id = callback.from_user.id
+    inv_id = int(callback.data.split("_")[2])
+    res = db.withdraw_investment(user_id, inv_id)
+    if not res:
+        await callback.answer("Инвестиция недоступна", show_alert=True)
+        return
+    payout, prev_status = res
+    if prev_status == 'active':
+        msg = f"✅ Досрочный вывод: {payout:,.0f} ₽ (учтен штраф 5%)"
+    else:
+        msg = f"✅ Вывод: {payout:,.0f} ₽"
+    db.update_player_balance(user_id, payout, "investment_withdraw", f"Вывод по инвестиции #{inv_id}")
+    try:
+        db.update_investment_prices()
+    except Exception:
+        pass
+    await callback.answer(msg, show_alert=True)
     await investments_menu(callback)
 
     
