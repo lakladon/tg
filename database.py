@@ -169,6 +169,17 @@ class GameDatabase:
             )
         ''')
         
+        # Таблица кулдаунов
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS cooldowns (
+                user_id INTEGER NOT NULL,
+                action_type TEXT NOT NULL,
+                expires_at TIMESTAMP NOT NULL,
+                PRIMARY KEY (user_id, action_type),
+                FOREIGN KEY (user_id) REFERENCES players (user_id)
+            )
+        ''')
+        
         conn.commit()
         conn.close()
     
@@ -990,3 +1001,103 @@ class GameDatabase:
         except Exception as e:
             print(f"Ошибка pvp_cooldown_remaining: {e}")
             return 0
+    def set_cooldown(self, user_id: int, action_type: str, minutes: int) -> bool:
+            """Установить кулдаун для действия"""
+            try:
+                conn = sqlite3.connect(self.db_path)
+                cursor = conn.cursor()
+                cursor.execute('''
+                    INSERT OR REPLACE INTO cooldowns (user_id, action_type, expires_at)
+                    VALUES (?, ?, datetime('now', '+{} minutes'))
+                '''.format(minutes), (user_id, action_type))
+                conn.commit()
+                conn.close()
+                return True
+            except Exception as e:
+                print(f"Ошибка set_cooldown: {e}")
+                return False
+
+    def get_cooldown_remaining(self, user_id: int, action_type: str) -> int:
+                """Получить оставшееся время кулдауна в секундах"""
+                try:
+                    conn = sqlite3.connect(self.db_path)
+                    cursor = conn.cursor()
+                    cursor.execute('''
+                        SELECT COALESCE((strftime("%s", expires_at) - strftime("%s", "now")), 0)
+                        FROM cooldowns 
+                        WHERE user_id = ? AND action_type = ?
+                    ''', (user_id, action_type))
+                    row = cursor.fetchone()
+                    conn.close()
+                    if not row or row[0] is None:
+                        return 0
+                    remaining = int(row[0])
+                    return remaining if remaining > 0 else 0
+                except Exception as e:
+                    print(f"Ошибка get_cooldown_remaining: {e}")
+                    return 0
+
+    def sell_business(self, user_id: int, business_id: int) -> Dict:
+                    """Продаём бизнес ((((Я мистер бiзnуs))))"""
+                    try:
+                        conn = sqlite3.connect(self.db_path)
+                        cursor = conn.cursor()
+                        
+                        # Получаем информацию о бизнесе
+                        cursor.execute('''
+                            SELECT business_type, level, improvements, income, expenses
+                            FROM businesses 
+                            WHERE id = ? AND user_id = ?
+                        ''', (business_id, user_id))
+                        business_data = cursor.fetchone()
+                        
+                        if not business_data:
+                            conn.close()
+                            return {'success': False, 'message': 'Бизнес не найден'}
+                        
+                        business_type, level, improvements_json, income, expenses = business_data
+                        improvements = json.loads(improvements_json) if improvements_json else []
+                        
+                        # Рассчитываем стоимость продажи
+                        # Базовая стоимость = доход * 10 + стоимость улучшений * 0.7
+                        base_value = income * 10
+                        improvements_value = 0
+                        
+                        from config import IMPROVEMENTS
+                        for improvement in improvements:
+                            if improvement in IMPROVEMENTS:
+                                improvements_value += IMPROVEMENTS[improvement]['cost'] * 0.7
+                        
+                        # Бонус за уровень бизнеса
+                        level_bonus = (level - 1) * 1000
+                        
+                        total_value = base_value + improvements_value + level_bonus
+                        
+                        # Обновляем баланс игрока
+                        cursor.execute('''
+                            UPDATE players 
+                            SET balance = balance + ?
+                            WHERE user_id = ?
+                        ''', (total_value, user_id))
+                        
+                        # Удаляем бизнес
+                        cursor.execute('DELETE FROM businesses WHERE id = ?', (business_id,))
+                        
+                        # Записываем транзакцию
+                        cursor.execute('''
+                            INSERT INTO transactions (user_id, business_id, type, amount, description)
+                            VALUES (?, ?, 'business_sale', ?, 'Продажа бизнеса')
+                        ''', (user_id, business_id, total_value))
+                        
+                        conn.commit()
+                        conn.close()
+                        
+                        return {
+                            'success': True, 
+                            'sale_price': total_value,
+                            'message': f'Бизнес продан за {total_value:,.0f} ₽'
+                        }
+                        
+                    except Exception as e:
+                        print(f"Ошибка sell_business: {e}")
+                        return {'success': False, 'message': 'Ошибка при продаже бизнеса'}
