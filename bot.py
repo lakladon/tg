@@ -41,20 +41,20 @@ class GameStates(StatesGroup):
 def get_main_menu_keyboard(user_id: int = None):
     """Главное меню игры"""
     keyboard = InlineKeyboardBuilder()
-    keyboard.add(InlineKeyboardButton(text="💰 Мой профиль", callback_data="profile"))
-    keyboard.add(InlineKeyboardButton(text="🏢 Мои бизнесы", callback_data="businesses"))
-    keyboard.add(InlineKeyboardButton(text="🛠 Улучшения", callback_data="improvements"))
-    keyboard.add(InlineKeyboardButton(text="➕ Новый бизнес", callback_data="add_business"))
+    keyboard.add(InlineKeyboardButton(text="💰 Профиль", callback_data="profile"))
+    keyboard.add(InlineKeyboardButton(text="🏢 Бизнесы", callback_data="businesses"))
+    keyboard.add(InlineKeyboardButton(text="🛠 Апгрейды", callback_data="improvements"))
+    keyboard.add(InlineKeyboardButton(text="➕ Новый", callback_data="add_business"))
     keyboard.add(InlineKeyboardButton(text="📊 Рейтинг", callback_data="rating"))
-    keyboard.add(InlineKeyboardButton(text="⭐ ТОП отзывов", callback_data="rev_top"))
-    keyboard.add(InlineKeyboardButton(text="🎯 Достижения", callback_data="achievements"))
-    keyboard.add(InlineKeyboardButton(text="🎲 Случайное событие", callback_data="random_event"))
-    keyboard.add(InlineKeyboardButton(text="📈 Ежедневный доход", callback_data="daily_income"))
+    keyboard.add(InlineKeyboardButton(text="⭐ Отзывы", callback_data="rev_top"))
+    keyboard.add(InlineKeyboardButton(text="🎯 Награды", callback_data="achievements"))
+    keyboard.add(InlineKeyboardButton(text="🎲 События", callback_data="random_event"))
+    keyboard.add(InlineKeyboardButton(text="📈 Доходы", callback_data="daily_income"))
     keyboard.add(InlineKeyboardButton(text="🏦 Кредиты", callback_data="loans"))
-    keyboard.add(InlineKeyboardButton(text="💼 Инвестиции", callback_data="investments"))
+    keyboard.add(InlineKeyboardButton(text="💼 Инвест", callback_data="investments"))
     keyboard.add(InlineKeyboardButton(text="⚔️ PvP", callback_data="pvp"))
     keyboard.row(InlineKeyboardButton(text="ℹ️ Помощь", callback_data="help"))
-    # Увеличиваем количество кнопок в строке: 3-3-3-3 кнопки для более компактного отображения
+    # Увеличиваем количество кнопок в строке: 3-3-3-3 кнопки одинакового размера
     keyboard.adjust(3, 3, 3, 3, 1)
     return keyboard.as_markup()
 
@@ -84,15 +84,15 @@ async def add_business_flow(callback: types.CallbackQuery, state: FSMContext):
 def get_business_management_keyboard(business_id: int):
     """Управление конкретным бизнесом"""
     keyboard = InlineKeyboardBuilder()
-    keyboard.add(InlineKeyboardButton(text="📊 Статистика", callback_data=f"stats_{business_id}"))
-    keyboard.add(InlineKeyboardButton(text="🛠 Улучшить", callback_data=f"improve_{business_id}"))
-    keyboard.add(InlineKeyboardButton(text="📦 Продукция", callback_data=f"prod_menu_{business_id}"))
-    keyboard.add(InlineKeyboardButton(text="👥 Сотрудники", callback_data=f"emp_menu_{business_id}"))
-    keyboard.add(InlineKeyboardButton(text="🧑‍🤝‍🧑 Посетители", callback_data=f"vis_menu_{business_id}"))
+    keyboard.add(InlineKeyboardButton(text="📊 Статы", callback_data=f"stats_{business_id}"))
+    keyboard.add(InlineKeyboardButton(text="🛠 Апгрейд", callback_data=f"improve_{business_id}"))
+    keyboard.add(InlineKeyboardButton(text="📦 Товары", callback_data=f"prod_menu_{business_id}"))
+    keyboard.add(InlineKeyboardButton(text="👥 Команда", callback_data=f"emp_menu_{business_id}"))
+    keyboard.add(InlineKeyboardButton(text="🧑‍🤝‍🧑 Клиенты", callback_data=f"vis_menu_{business_id}"))
     keyboard.add(InlineKeyboardButton(text="⭐ Отзывы", callback_data=f"rev_menu_{business_id}"))
     keyboard.add(InlineKeyboardButton(text="💰 Продать", callback_data=f"sell_{business_id}"))
     keyboard.row(InlineKeyboardButton(text="🔙 К списку", callback_data="businesses"))
-    # Увеличиваем количество кнопок в строке: 2-2-2-1 кнопки
+    # Увеличиваем количество кнопок в строке: 2-2-2-1 кнопки с одинаковым размером
     keyboard.adjust(2, 2, 2, 1)
     return keyboard.as_markup()
 
