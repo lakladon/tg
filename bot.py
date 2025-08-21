@@ -54,8 +54,8 @@ def get_main_menu_keyboard(user_id: int = None):
     keyboard.add(InlineKeyboardButton(text="💼 Инвестиции", callback_data="investments"))
     keyboard.add(InlineKeyboardButton(text="⚔️ PvP", callback_data="pvp"))
     keyboard.row(InlineKeyboardButton(text="ℹ️ Помощь", callback_data="help"))
-    # Делим на строки по 2 кнопки, затем последнюю строку отдельно
-    keyboard.adjust(2, 2, 2, 1)
+    # Увеличиваем количество кнопок в строке: 3-3-3-3 кнопки для более компактного отображения
+    keyboard.adjust(3, 3, 3, 3, 1)
     return keyboard.as_markup()
 
 def get_business_choice_keyboard():
@@ -65,8 +65,8 @@ def get_business_choice_keyboard():
         text = f"{business_info['emoji']} {business_info['name']}"
         keyboard.add(InlineKeyboardButton(text=text, callback_data=f"business_{business_id}"))
     keyboard.row(InlineKeyboardButton(text="🔙 Назад", callback_data="back_to_main"))
-    # По одной кнопке в строке для читабельности
-    keyboard.adjust(1)
+    # Увеличиваем количество кнопок в строке: по 2 кнопки для компактности
+    keyboard.adjust(2)
     return keyboard.as_markup()
 
 @router.callback_query(F.data == "add_business")
@@ -92,6 +92,8 @@ def get_business_management_keyboard(business_id: int):
     keyboard.add(InlineKeyboardButton(text="⭐ Отзывы", callback_data=f"rev_menu_{business_id}"))
     keyboard.add(InlineKeyboardButton(text="💰 Продать", callback_data=f"sell_{business_id}"))
     keyboard.row(InlineKeyboardButton(text="🔙 К списку", callback_data="businesses"))
+    # Увеличиваем количество кнопок в строке: 2-2-2-1 кнопки
+    keyboard.adjust(2, 2, 2, 1)
     return keyboard.as_markup()
 
 def get_improvements_keyboard(business_id: int, player_balance: float):
@@ -104,7 +106,8 @@ def get_improvements_keyboard(business_id: int, player_balance: float):
             text += " ❌"
         keyboard.add(InlineKeyboardButton(text=text, callback_data=f"buy_improvement_{business_id}_{improvement_id}"))
     keyboard.row(InlineKeyboardButton(text="🔙 Назад", callback_data="businesses"))
-    keyboard.adjust(1)
+    # Увеличиваем количество кнопок в строке: по 2 кнопки для компактности
+    keyboard.adjust(2)
     return keyboard.as_markup()
 
 # Обработчики команд
