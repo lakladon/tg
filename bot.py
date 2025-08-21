@@ -840,63 +840,63 @@ async def show_stats(callback: types.CallbackQuery):
 async def sell_business(callback: types.CallbackQuery):
     business_id = int(callback.data.split("_")[1])
     user_id = callback.from_user.id
-        
-        # Получаем информацию о бизнесе для подтверждения
+    
+    # Получаем информацию о бизнесе для подтверждения
     businesses = db.get_player_businesses(user_id)
     business = next((b for b in businesses if b['id'] == business_id), None)
-        
+    
     if not business:
-         await callback.answer("Бизнес не найден!", show_alert=True)
-         return
-        
-        # Рассчитываем предполагаемую стоимость продажи
+        await callback.answer("Бизнес не найден!", show_alert=True)
+        return
+    
+    # Рассчитываем предполагаемую стоимость продажи
     base_value = business['income'] * 10
     improvements_value = 0
-        
+    
     for improvement in business['improvements']:
         if improvement in IMPROVEMENTS:
             improvements_value += IMPROVEMENTS[improvement]['cost'] * 0.7
-        
-        level_bonus = (business['level'] - 1) * 1000
-        estimated_value = base_value + improvements_value + level_bonus
-        
-        # Создаем клавиатуру подтверждения
-        keyboard = InlineKeyboardBuilder()
-        keyboard.add(InlineKeyboardButton(text="✅ Подтвердить продажу", callback_data=f"confirm_sell_{business_id}"))
-        keyboard.add(InlineKeyboardButton(text="❌ Отмена", callback_data=f"manage_{business_id}"))
-        keyboard.adjust(1)
-        
+    
+    level_bonus = (business['level'] - 1) * 1000
+    estimated_value = base_value + improvements_value + level_bonus
+    
+    # Создаем клавиатуру подтверждения
+    keyboard = InlineKeyboardBuilder()
+    keyboard.add(InlineKeyboardButton(text="✅ Подтвердить продажу", callback_data=f"confirm_sell_{business_id}"))
+    keyboard.add(InlineKeyboardButton(text="❌ Отмена", callback_data=f"manage_{business_id}"))
+    keyboard.adjust(1)
+    
+    await callback.message.edit_text(
+        f"💰 *Продажа бизнеса*\n\n"
+        f"🏢 {business['name']}\n"
+        f"📊 Уровень: {business['level']}\n"
+        f"💵 Ежедневный доход: {business['income']:,.0f} ₽\n"
+        f"💸 Ежедневные расходы: {business['expenses']:,.0f} ₽\n"
+        f"🛠 Улучшений: {len(business['improvements'])}\n\n"
+        f"💰 *Цена продажи: {estimated_value:,.0f} ₽*\n\n"
+        f"⚠️ После продажи бизнес будет удален навсегда!",
+        reply_markup=keyboard.as_markup(),
+        parse_mode="Markdown"
+    )
+
+@router.callback_query(F.data.startswith("confirm_sell_"))
+async def confirm_sell_business(callback: types.CallbackQuery):
+    """Подтверждение продажи бизнеса"""
+    business_id = int(callback.data.split("_")[2])
+    user_id = callback.from_user.id
+    
+    result = db.sell_business(user_id, business_id)
+    
+    if result['success']:
         await callback.message.edit_text(
-            f"💰 *Продажа бизнеса*\n\n"
-            f"🏢 {business['name']}\n"
-            f"📊 Уровень: {business['level']}\n"
-            f"💵 Ежедневный доход: {business['income']:,.0f} ₽\n"
-            f"💸 Ежедневные расходы: {business['expenses']:,.0f} ₽\n"
-            f"🛠 Улучшений: {len(business['improvements'])}\n\n"
-            f"💰 *Цена продажи: {estimated_value:,.0f} ₽*\n\n"
-            f"⚠️ После продажи бизнес будет удален навсегда!",
-            reply_markup=keyboard.as_markup(),
+            f"✅ *Бизнес успешно продан!*\n\n"
+            f"💰 Получено: {result['sale_price']:,.0f} ₽\n\n"
+            f"Деньги добавлены на ваш баланс.",
+            reply_markup=get_main_menu_keyboard(user_id),
             parse_mode="Markdown"
         )
-
-    @router.callback_query(F.data.startswith("confirm_sell_"))
-    async def confirm_sell_business(callback: types.CallbackQuery):
-        """Подтверждение продажи бизнеса"""
-        business_id = int(callback.data.split("_")[2])
-        user_id = callback.from_user.id
-        
-        result = db.sell_business(user_id, business_id)
-        
-        if result['success']:
-            await callback.message.edit_text(
-                f"✅ *Бизнес успешно продан!*\n\n"
-                f"💰 Получено: {result['sale_price']:,.0f} ₽\n\n"
-                f"Деньги добавлены на ваш баланс.",
-                reply_markup=get_main_menu_keyboard(user_id),
-                parse_mode="Markdown"
-            )
-        else:
-            await callback.answer(result['message'], show_alert=True)
+    else:
+        await callback.answer(result['message'], show_alert=True)
 
 @router.callback_query(F.data.startswith("improve_"))
 async def show_improvements(callback: types.CallbackQuery):
