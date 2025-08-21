@@ -22,6 +22,40 @@ class AdvancedGameFeatures:
             'loss': -0.05,   # -5% от собственного капитала
             'draw': 0.02     # 2% от ставки
         }
+        # Списки для генерации ФИО и отзывов
+        self.first_names = [
+            'Александр', 'Михаил', 'Иван', 'Дмитрий', 'Сергей', 'Андрей', 'Алексей', 'Максим', 'Евгений', 'Никита',
+            'Мария', 'Анна', 'Екатерина', 'Дарья', 'Алина', 'Елена', 'Наталья', 'Ольга', 'Виктория', 'Татьяна'
+        ]
+        self.last_names = [
+            'Иванов', 'Петров', 'Сидоров', 'Смирнов', 'Кузнецов', 'Попов', 'Васильев', 'Новиков', 'Федоров', 'Волков',
+            'Алексеева', 'Петренко', 'Орлова', 'Соколова', 'Морозова', 'Макарова', 'Егорова', 'Романова', 'Данилова', 'Киселева'
+        ]
+        self.middle_names = [
+            'Александрович', 'Михайлович', 'Иванович', 'Дмитриевич', 'Сергеевич', 'Андреевич', 'Алексеевич', 'Максимович', 'Евгеньевич', 'Никитич',
+            'Александровна', 'Михайловна', 'Ивановна', 'Дмитриевна', 'Сергеевна', 'Андреевна', 'Алексеевна', 'Максимовна', 'Евгеньевна', 'Никитична'
+        ]
+        self.review_templates_positive = [
+            "Отличный сервис и приятная атмосфера!",
+            "Все очень понравилось, обязательно вернусь снова.",
+            "Персонал вежливый, цены адекватные, рекомендую!",
+            "Качество на высоте, быстро и вкусно.",
+            "Замечательное место, 5 звезд!"
+        ]
+        self.review_templates_neutral = [
+            "Неплохо, но есть куда расти.",
+            "Средний уровень, ожидал большего.",
+            "Все нормально, без восторгов.",
+            "Обычное место, ничего особенного.",
+            "Цена-качество соответствует."
+        ]
+        self.review_templates_negative = [
+            "Долго ждал, сервис оставляет желать лучшего.",
+            "Качество не соответствует цене.",
+            "Разочаровался, вернусь вряд ли.",
+            "Шумно и некомфортно, не рекомендую.",
+            "Проблемы с заказом, неприятный опыт."
+        ]
     
     def calculate_loan_eligibility(self, player: Dict, loan_amount: float) -> Dict:
         """Расчет возможности получения кредита"""
@@ -245,6 +279,61 @@ class AdvancedGameFeatures:
         power += min(player['balance'] / 1000, 1000)
         
         return power
+
+    # ------------------- Генераторы ФИО и отзывов -------------------
+    def generate_full_name(self) -> str:
+        """Генерация случайного ФИО (упрощенно)."""
+        first = random.choice(self.first_names)
+        last = random.choice(self.last_names)
+        middle = random.choice(self.middle_names)
+        return f"{last} {first} {middle}"
+
+    def generate_review(self) -> dict:
+        """Генерация случайного отзыва: рейтинг 1-5 и текст по шаблону."""
+        rating = random.choices([1, 2, 3, 4, 5], weights=[8, 10, 20, 30, 32])[0]
+        if rating >= 4:
+            text = random.choice(self.review_templates_positive)
+        elif rating == 3:
+            text = random.choice(self.review_templates_neutral)
+        else:
+            text = random.choice(self.review_templates_negative)
+        # Небольшие вариации текста
+        suffixes = [
+            "", " Спасибо персоналу!", " Обязательно порекомендую друзьям.", " Приду еще.", " Возможно, вернусь."
+        ]
+        text = text + random.choice(suffixes)
+        return { 'rating': rating, 'text': text }
+
+    def simulate_visitors(self, business: Dict, max_visitors: int = 10) -> List[Dict]:
+        """Симуляция посетителей для бизнеса: возвращает список {name, spent, rating?, review?}."""
+        visitors = []
+        # Популярность влияет на количество посетителей
+        base = 3
+        pop_factor = 1.0
+        try:
+            pop_factor = 1.0 + float(business.get('popularity', 1.0) - 1.0)
+        except Exception:
+            pop_factor = 1.0
+        count = max(1, min(max_visitors, int(random.gauss(base * pop_factor, 2)) ))
+        for _ in range(count):
+            name = self.generate_full_name()
+            # Траты зависят от типа бизнеса
+            btype = business.get('business_type')
+            base_spend = {
+                'coffee_shop': (200, 800),
+                'restaurant': (800, 3000),
+                'factory': (2000, 6000),
+                'it_startup': (1000, 5000),
+                'farm': (150, 600)
+            }.get(btype, (300, 1500))
+            spent = float(random.randint(*base_spend))
+            # Не каждый посетитель оставляет отзыв
+            leave_review = random.random() < 0.4
+            review = None
+            if leave_review:
+                review = self.generate_review()
+            visitors.append({ 'name': name, 'spent': spent, 'review': review })
+        return visitors
     
     def generate_market_event(self, player_level: int = 1) -> Dict:
         """Генерация рыночного события"""
