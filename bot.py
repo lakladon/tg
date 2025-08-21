@@ -46,6 +46,7 @@ def get_main_menu_keyboard(user_id: int = None):
     keyboard.add(InlineKeyboardButton(text="🛠 Улучшения", callback_data="improvements"))
     keyboard.add(InlineKeyboardButton(text="➕ Новый бизнес", callback_data="add_business"))
     keyboard.add(InlineKeyboardButton(text="📊 Рейтинг", callback_data="rating"))
+    keyboard.add(InlineKeyboardButton(text="⭐ ТОП отзывов", callback_data="rev_top"))
     keyboard.add(InlineKeyboardButton(text="🎯 Достижения", callback_data="achievements"))
     keyboard.add(InlineKeyboardButton(text="🎲 Случайное событие", callback_data="random_event"))
     keyboard.add(InlineKeyboardButton(text="📈 Ежедневный доход", callback_data="daily_income"))
@@ -86,6 +87,9 @@ def get_business_management_keyboard(business_id: int):
     keyboard.add(InlineKeyboardButton(text="📊 Статистика", callback_data=f"stats_{business_id}"))
     keyboard.add(InlineKeyboardButton(text="🛠 Улучшить", callback_data=f"improve_{business_id}"))
     keyboard.add(InlineKeyboardButton(text="📦 Продукция", callback_data=f"prod_menu_{business_id}"))
+    keyboard.add(InlineKeyboardButton(text="👥 Сотрудники", callback_data=f"emp_menu_{business_id}"))
+    keyboard.add(InlineKeyboardButton(text="🧑‍🤝‍🧑 Посетители", callback_data=f"vis_menu_{business_id}"))
+    keyboard.add(InlineKeyboardButton(text="⭐ Отзывы", callback_data=f"rev_menu_{business_id}"))
     keyboard.add(InlineKeyboardButton(text="💰 Продать", callback_data=f"sell_{business_id}"))
     keyboard.row(InlineKeyboardButton(text="🔙 К списку", callback_data="businesses"))
     return keyboard.as_markup()
@@ -1005,6 +1009,99 @@ async def show_rating(callback: types.CallbackQuery):
     keyboard.add(InlineKeyboardButton(text="🔙 Главное меню", callback_data="main_menu"))
     await callback.message.edit_text(rating_text, reply_markup=keyboard.as_markup(), parse_mode="HTML")
 
+@router.callback_query(F.data.startswith("emp_menu_"))
+async def emp_menu(callback: types.CallbackQuery):
+    business_id = int(callback.data.split("_")[2])
+    employees = db.get_business_employees(business_id)
+    keyboard = InlineKeyboardBuilder()
+    keyboard.add(InlineKeyboardButton(text="➕ Нанять", callback_data=f"emp_hire_{business_id}"))
+    for e in employees[:8]:
+        keyboard.add(InlineKeyboardButton(text=f"❌ Уволить: {e['full_name']}", callback_data=f"emp_fire_{e['id']}_{business_id}"))
+    keyboard.row(InlineKeyboardButton(text="🔙 Назад", callback_data=f"manage_{business_id}"))
+    text = "👥 Сотрудники\n\n" + ("\n".join([f"• {e['full_name']} — {e['role']} | {e['salary']:,.0f} ₽" for e in employees]) or "Пока нет сотрудников.")
+    await callback.message.edit_text(text, reply_markup=keyboard.as_markup())
+
+@router.callback_query(F.data.startswith("emp_hire_"))
+async def emp_hire(callback: types.CallbackQuery):
+    business_id = int(callback.data.split("_")[2])
+    # Генерация ФИО и базовой роли/зарплаты
+    name = advanced.generate_full_name()
+    role = random.choice(["Официант", "Бариста", "Менеджер", "Разработчик", "Рабочий", "Кассир"]) 
+    salary = random.randint(1500, 6000)
+    perf = round(random.uniform(0.8, 1.3), 2)
+    db.add_employee(business_id, name, role, float(salary), float(perf))
+    await callback.answer("Сотрудник нанят!")
+    await emp_menu(callback)
+
+@router.callback_query(F.data.startswith("emp_fire_"))
+async def emp_fire(callback: types.CallbackQuery):
+    _, _, emp_id, business_id = callback.data.split("_")
+    db.delete_employee(int(emp_id))
+    await callback.answer("Сотрудник уволен")
+    # Вернуться к списку
+    callback.data = f"emp_menu_{business_id}"
+    await emp_menu(callback)
+
+@router.callback_query(F.data.startswith("vis_menu_"))
+async def vis_menu(callback: types.CallbackQuery):
+    business_id = int(callback.data.split("_")[2])
+    keyboard = InlineKeyboardBuilder()
+    keyboard.add(InlineKeyboardButton(text="🎲 Сымитировать поток", callback_data=f"vis_sim_{business_id}"))
+    keyboard.row(InlineKeyboardButton(text="🔙 Назад", callback_data=f"manage_{business_id}"))
+    await callback.message.edit_text("🧑‍🤝‍🧑 Посетители: сгенерируйте новых и собирайте отзывы.", reply_markup=keyboard.as_markup())
+
+@router.callback_query(F.data.startswith("vis_sim_"))
+async def vis_sim(callback: types.CallbackQuery):
+    business_id = int(callback.data.split("_")[2])
+    # Найдем бизнес для типа
+    user_id = callback.from_user.id
+    businesses = db.get_player_businesses(user_id)
+    business = next((b for b in businesses if b['id'] == business_id), None)
+    if not business:
+        await callback.answer("Бизнес не найден")
+        return
+    visitors = advanced.simulate_visitors(business)
+    income_delta = 0.0
+    reviews_created = 0
+    for v in visitors:
+        db.add_visitor(business_id, v['name'], v['spent'], (v['review']['rating'] if v['review'] else None))
+        income_delta += float(v['spent'])
+        if v['review']:
+            db.add_review(business_id, v['name'], int(v['review']['rating']), v['review']['text'])
+            reviews_created += 1
+    if income_delta:
+        db.update_player_balance(user_id, income_delta, "visitors", f"Поток посетителей в бизнесе {business['name']}")
+    await callback.message.edit_text(
+        f"✅ Посетителей: {len(visitors)}\n💵 Доход: +{income_delta:,.0f} ₽\n⭐ Новых отзывов: {reviews_created}",
+        reply_markup=get_business_management_keyboard(business_id)
+    )
+
+@router.callback_query(F.data.startswith("rev_menu_"))
+async def rev_menu(callback: types.CallbackQuery):
+    business_id = int(callback.data.split("_")[2])
+    rating_info = db.get_business_rating(business_id)
+    reviews = db.get_business_reviews(business_id, limit=10)
+    text_lines = [
+        f"⭐ Средний рейтинг: {rating_info['avg_rating']:.2f} ({rating_info['reviews_count']})",
+        "\n" + "\n".join([f"{r['rating']}★ — {html.escape(r['visitor_name'] or 'Гость')}: {html.escape(r['text'])}" for r in reviews])
+        or "Пока нет отзывов."
+    ]
+    keyboard = InlineKeyboardBuilder()
+    keyboard.add(InlineKeyboardButton(text="🏆 Топ по отзывам", callback_data="rev_top"))
+    keyboard.row(InlineKeyboardButton(text="🔙 Назад", callback_data=f"manage_{business_id}"))
+    await callback.message.edit_text("\n".join(text_lines), reply_markup=keyboard.as_markup())
+
+@router.callback_query(F.data == "rev_top")
+async def rev_top(callback: types.CallbackQuery):
+    top = db.get_top_businesses_by_reviews(limit=10)
+    lines = ["🏆 Топ бизнесов по отзывам:\n"]
+    for i, b in enumerate(top, 1):
+        bt = BUSINESS_TYPES.get(b['business_type'], { 'emoji': '🏢', 'name': 'Бизнес' })
+        lines.append(f"{i}. {bt['emoji']} {html.escape(b['name'])} — {b['avg_rating']:.2f}★ ({b['reviews_count']})")
+    keyboard = InlineKeyboardBuilder()
+    keyboard.add(InlineKeyboardButton(text="🔙 Главное меню", callback_data="main_menu"))
+    await callback.message.edit_text("\n".join(lines), reply_markup=keyboard.as_markup())
+
 @router.callback_query(F.data == "achievements")
 async def show_achievements(callback: types.CallbackQuery):
     """Показать достижения игрока"""
@@ -1112,9 +1209,11 @@ async def collect_daily_income(callback: types.CallbackQuery):
     
     # Рассчитываем дневной прогресс
     daily_progress = game_logic.calculate_daily_progress(player, businesses)
-    
+    # Учитываем зарплаты сотрудников
+    salaries = db.get_total_employees_salary(user_id)
+    net_after_salaries = daily_progress['net_income'] - salaries
     # Обновляем баланс игрока
-    db.update_player_balance(user_id, daily_progress['net_income'], "daily_income", "Ежедневный доход")
+    db.update_player_balance(user_id, net_after_salaries, "daily_income", "Ежедневный доход (с учетом зарплат)")
     
     # Добавляем опыт и, при необходимости, повышаем уровень
     new_exp = db.add_experience(user_id, daily_progress['experience_gained'])
@@ -1147,8 +1246,9 @@ async def collect_daily_income(callback: types.CallbackQuery):
     await callback.message.edit_text(
         f"💰 *Ежедневный доход получен!*\n\n"
         f"📈 Доход: +{daily_progress['total_income']:,.0f} ₽\n"
-        f"💸 Расходы: -{daily_progress['total_expenses']:,.0f} ₽\n"
-        f"💵 Чистая прибыль: +{daily_progress['net_income']:,.0f} ₽\n"
+        f"💸 Расходы (бизнес): -{daily_progress['total_expenses']:,.0f} ₽\n"
+        f"👥 Зарплаты: -{salaries:,.0f} ₽\n"
+        f"💵 Чистая прибыль: +{net_after_salaries:,.0f} ₽\n"
         f"📊 Опыт: +{daily_progress['experience_gained']}",
         reply_markup=get_main_menu_keyboard(),
         parse_mode="Markdown"
