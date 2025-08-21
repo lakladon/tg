@@ -38,7 +38,7 @@ class GameStates(StatesGroup):
     competitors = State()
     adding_business = State()
 # Клавиатуры
-def get_main_menu_keyboard():
+def get_main_menu_keyboard(user_id: int = None):
     """Главное меню игры"""
     keyboard = InlineKeyboardBuilder()
     keyboard.add(InlineKeyboardButton(text="💰 Мой профиль", callback_data="profile"))
@@ -320,7 +320,7 @@ async def show_profile(callback: types.CallbackQuery):
 🕐 Последняя активность: {player['last_active'][:16]}
 """
     
-    await callback.message.edit_text(profile_text, reply_markup=get_main_menu_keyboard(), parse_mode="Markdown")
+    await callback.message.edit_text(profile_text, reply_markup=get_main_menu_keyboard(user_id), parse_mode="Markdown")
 
 @router.callback_query(F.data == "businesses")
 async def show_businesses(callback: types.CallbackQuery):
@@ -803,7 +803,64 @@ async def show_stats(callback: types.CallbackQuery):
 @router.callback_query(F.data.startswith("sell_"))
 async def sell_business(callback: types.CallbackQuery):
     business_id = int(callback.data.split("_")[1])
-    await callback.answer("Продажа бизнеса в разработке", show_alert=True)
+    user_id = callback.from_user.id
+        
+        # Получаем информацию о бизнесе для подтверждения
+    businesses = db.get_player_businesses(user_id)
+    business = next((b for b in businesses if b['id'] == business_id), None)
+        
+    if not business:
+         await callback.answer("Бизнес не найден!", show_alert=True)
+         return
+        
+        # Рассчитываем предполагаемую стоимость продажи
+    base_value = business['income'] * 10
+    improvements_value = 0
+        
+    for improvement in business['improvements']:
+        if improvement in IMPROVEMENTS:
+            improvements_value += IMPROVEMENTS[improvement]['cost'] * 0.7
+        
+        level_bonus = (business['level'] - 1) * 1000
+        estimated_value = base_value + improvements_value + level_bonus
+        
+        # Создаем клавиатуру подтверждения
+        keyboard = InlineKeyboardBuilder()
+        keyboard.add(InlineKeyboardButton(text="✅ Подтвердить продажу", callback_data=f"confirm_sell_{business_id}"))
+        keyboard.add(InlineKeyboardButton(text="❌ Отмена", callback_data=f"manage_{business_id}"))
+        keyboard.adjust(1)
+        
+        await callback.message.edit_text(
+            f"💰 *Продажа бизнеса*\n\n"
+            f"🏢 {business['name']}\n"
+            f"📊 Уровень: {business['level']}\n"
+            f"💵 Ежедневный доход: {business['income']:,.0f} ₽\n"
+            f"💸 Ежедневные расходы: {business['expenses']:,.0f} ₽\n"
+            f"🛠 Улучшений: {len(business['improvements'])}\n\n"
+            f"💰 *Цена продажи: {estimated_value:,.0f} ₽*\n\n"
+            f"⚠️ После продажи бизнес будет удален навсегда!",
+            reply_markup=keyboard.as_markup(),
+            parse_mode="Markdown"
+        )
+
+    @router.callback_query(F.data.startswith("confirm_sell_"))
+    async def confirm_sell_business(callback: types.CallbackQuery):
+        """Подтверждение продажи бизнеса"""
+        business_id = int(callback.data.split("_")[2])
+        user_id = callback.from_user.id
+        
+        result = db.sell_business(user_id, business_id)
+        
+        if result['success']:
+            await callback.message.edit_text(
+                f"✅ *Бизнес успешно продан!*\n\n"
+                f"💰 Получено: {result['sale_price']:,.0f} ₽\n\n"
+                f"Деньги добавлены на ваш баланс.",
+                reply_markup=get_main_menu_keyboard(user_id),
+                parse_mode="Markdown"
+            )
+        else:
+            await callback.answer(result['message'], show_alert=True)
 
 @router.callback_query(F.data.startswith("improve_"))
 async def show_improvements(callback: types.CallbackQuery):
@@ -960,6 +1017,16 @@ async def show_achievements(callback: types.CallbackQuery):
 async def trigger_random_event(callback: types.CallbackQuery):
     """Запуск случайного события"""
     user_id = callback.from_user.id
+     # Проверяем кулдаун
+    cooldown_remaining = db.get_cooldown_remaining(user_id, "random_event")
+    if cooldown_remaining > 0:
+        minutes = cooldown_remaining // 60
+        seconds = cooldown_remaining % 60
+        await callback.answer(
+            f"⏰ Случайное событие доступно через {minutes}м {seconds}с", 
+            show_alert=True
+        )
+        return
     player = db.get_player(user_id)
     businesses = db.get_player_businesses(user_id)
     
@@ -984,14 +1051,24 @@ async def trigger_random_event(callback: types.CallbackQuery):
         # Обновляем популярность
         if result['popularity_change'] != 0:
             db.update_player_popularity(user_id, result['popularity_change'])
-        
+        # Устанавливаем кулдаун на 30 минут
+        db.set_cooldown(user_id, "random_event", 30)
         await callback.message.edit_text(
-            f"🎲 *Случайное событие!*\n\n{result['message']}",
-            reply_markup=get_main_menu_keyboard(),
+            f"🎲 *Случайное событие!*\n\n{result['message']}\n\n"
+            f"⏰ Следующее событие будет доступно через 30 минут",
+            reply_markup=get_main_menu_keyboard(user_id),
             parse_mode="Markdown"
         )
     else:
-        await callback.answer("Сегодня ничего особенного не произошло.")
+         # Даже если событие не произошло, ставим кулдаун
+        db.set_cooldown(user_id, "random_event", 30)
+        await callback.message.edit_text(
+            "🎲 *Случайное событие*\n\n"
+            "Сегодня ничего особенного не произошло, но завтра может быть удача!\n\n"
+            "⏰ Следующее событие будет доступно через 30 минут",
+            reply_markup=get_main_menu_keyboard(user_id),
+            parse_mode="Markdown"
+        )
 
 @router.callback_query(F.data == "daily_income")
 async def collect_daily_income(callback: types.CallbackQuery):
@@ -1062,7 +1139,7 @@ async def show_main_menu(message_or_callback, user_id: int):
         await message_or_callback.answer(
             "🏢 У вас пока нет бизнесов.\n\n"
             "Начните с создания первого бизнеса!",
-            reply_markup=get_main_menu_keyboard()
+            reply_markup=get_main_menu_keyboard(user_id)
         )
         return
     
@@ -1085,9 +1162,9 @@ async def show_main_menu(message_or_callback, user_id: int):
 """
     
     if isinstance(message_or_callback, types.Message):
-        await message_or_callback.answer(menu_text, reply_markup=get_main_menu_keyboard(), parse_mode="Markdown")
+        await message_or_callback.answer(menu_text, reply_markup=get_main_menu_keyboard(user_id), parse_mode="Markdown")
     else:
-        await message_or_callback.message.edit_text(menu_text, reply_markup=get_main_menu_keyboard(), parse_mode="Markdown")
+        await message_or_callback.message.edit_text(menu_text, reply_markup=get_main_menu_keyboard(user_id), parse_mode="Markdown")
 
 @router.callback_query(F.data == "help")
 async def show_help(callback: types.CallbackQuery):
