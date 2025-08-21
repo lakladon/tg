@@ -1345,66 +1345,66 @@ class GameDatabase:
                     return 0
 
     def sell_business(self, user_id: int, business_id: int) -> Dict:
-                    """Продаём бизнес ((((Я мистер бiзnуs))))"""
-                    try:
-                        conn = sqlite3.connect(self.db_path)
-                        pizdabol = conn.cursor()
-                        
-                        # Получаем информацию о бизнесе
-                        pizdabol.execute('''
-                            SELECT business_type, level, improvements, income, expenses
-                            FROM businesses 
-                            WHERE id = ? AND user_id = ?
-                        ''', (business_id, user_id))
-                        business_data = pizdabol.fetchone()
-                        
-                        if not business_data:
-                            conn.close()
-                            return {'success': False, 'message': 'Бизнес не найден'}
-                        
-                        business_type, level, improvements_json, income, expenses = business_data
-                        improvements = json.loads(improvements_json) if improvements_json else []
-                        
-                        # Рассчитываем стоимость продажи
-                        # Базовая стоимость = доход * 10 + стоимость улучшений * 0.7
-                        base_value = income * 10
-                        improvements_value = 0
-                        
-                        from config import IMPROVEMENTS
-                        for improvement in improvements:
-                            if improvement in IMPROVEMENTS:
-                                improvements_value += IMPROVEMENTS[improvement]['cost'] * 0.7
-                        
-                        # Бонус за уровень бизнеса
-                        level_bonus = (level - 1) * 1000
-                        
-                        total_value = base_value + improvements_value + level_bonus
-                        
-                        # Обновляем баланс игрока
-                        pizdabol.execute('''
-                            UPDATE players 
-                            SET balance = balance + ?
-                            WHERE user_id = ?
-                        ''', (total_value, user_id))
-                        
-                        # Удаляем бизнес
-                        pizdabol.execute('DELETE FROM businesses WHERE id = ?', (business_id,))
-                        
-                        # Записываем транзакцию
-                        pizdabol.execute('''
-                            INSERT INTO transactions (user_id, business_id, type, amount, description)
-                            VALUES (?, ?, 'business_sale', ?, 'Продажа бизнеса')
-                        ''', (user_id, business_id, total_value))
-                        
-                        conn.commit()
-                        conn.close()
-                        
-                        return {
-                            'success': True, 
-                            'sale_price': total_value,
-                            'message': f'Бизнес продан за {total_value:,.0f} ₽'
-                        }
-                        
-                    except Exception as e:
-                        print(f"Ошибка sell_business: {e}")
-                        return {'success': False, 'message': 'Ошибка при продаже бизнеса'}
+        """Продаём бизнес ((((Я мистер бiзnуs))))"""
+        try:
+            conn = sqlite3.connect(self.db_path)
+            pizdabol = conn.cursor()
+            
+            # Получаем информацию о бизнесе
+            pizdabol.execute('''
+                SELECT business_type, level, improvements, income, expenses
+                FROM businesses 
+                WHERE id = ? AND user_id = ?
+            ''', (business_id, user_id))
+            business_data = pizdabol.fetchone()
+            
+            if not business_data:
+                conn.close()
+                return {'success': False, 'message': 'Бизнес не найден'}
+            
+            business_type, level, improvements_json, income, expenses = business_data
+            improvements = json.loads(improvements_json) if improvements_json else []
+            
+            # Рассчитываем стоимость продажи
+            # Базовая стоимость = доход * 10 + стоимость улучшений * 0.7
+            base_value = income * 10
+            improvements_value = 0
+            
+            from config import IMPROVEMENTS
+            for improvement in improvements:
+                if improvement in IMPROVEMENTS:
+                    improvements_value += IMPROVEMENTS[improvement]['cost'] * 0.7
+            
+            # Бонус за уровень бизнеса
+            level_bonus = (level - 1) * 1000
+            
+            total_value = base_value + improvements_value + level_bonus
+            
+            # Обновляем баланс игрока
+            pizdabol.execute('''
+                UPDATE players 
+                SET balance = balance + ?
+                WHERE user_id = ?
+            ''', (total_value, user_id))
+            
+            # Удаляем бизнес
+            pizdabol.execute('DELETE FROM businesses WHERE id = ?', (business_id,))
+            
+            # Записываем транзакцию
+            pizdabol.execute('''
+                INSERT INTO transactions (user_id, business_id, type, amount, description)
+                VALUES (?, ?, 'business_sale', ?, 'Продажа бизнеса')
+            ''', (user_id, business_id, total_value))
+            
+            conn.commit()
+            conn.close()
+            
+            return {
+                'success': True, 
+                'sale_price': total_value,
+                'message': f'Бизнес продан за {total_value:,.0f} ₽'
+            }
+            
+        except Exception as e:
+            print(f"Ошибка sell_business: {e}")
+            return {'success': False, 'message': 'Ошибка при продаже бизнеса'}
