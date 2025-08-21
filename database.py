@@ -1,5 +1,6 @@
 import sqlite3
 import json
+import random
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional, Tuple
 
@@ -115,10 +116,30 @@ class GameDatabase:
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 matures_at TIMESTAMP NOT NULL,
                 status TEXT DEFAULT 'active',
+                -- дополнительные поля для динамической стоимости
+                current_value REAL,
+                volatility REAL,
+                last_price_update TIMESTAMP,
                 FOREIGN KEY (user_id) REFERENCES players (user_id),
                 FOREIGN KEY (business_id) REFERENCES businesses (id)
             )
         ''')
+
+        # Мягкая миграция: добавляем отсутствующие колонки для динамической стоимости инвестиций
+        try:
+            cursor.execute("PRAGMA table_info('investments')")
+            columns = [row[1] for row in cursor.fetchall()]
+            if 'current_value' not in columns:
+                cursor.execute("ALTER TABLE investments ADD COLUMN current_value REAL")
+            if 'volatility' not in columns:
+                cursor.execute("ALTER TABLE investments ADD COLUMN volatility REAL")
+            if 'last_price_update' not in columns:
+                cursor.execute("ALTER TABLE investments ADD COLUMN last_price_update TIMESTAMP")
+            # Инициализация текущей стоимости для уже существующих записей
+            cursor.execute("UPDATE investments SET current_value = amount WHERE current_value IS NULL")
+        except Exception as e:
+            # Без падения приложения
+            print(f"Миграция таблицы investments пропущена: {e}")
 
         # Таблица продукции (производственные задания)
         cursor.execute('''
@@ -598,10 +619,19 @@ class GameDatabase:
         try:
             conn = sqlite3.connect(self.db_path)
             cursor = conn.cursor()
+            # Волатильность зависит от стратегии
+            strategy_volatility = {
+                'conservative': 0.02,
+                'balanced': 0.05,
+                'aggressive': 0.10
+            }.get(strategy, 0.05)
             cursor.execute('''
-                INSERT INTO investments (user_id, business_id, strategy, amount, expected_return, matures_at, status)
-                VALUES (?, ?, ?, ?, ?, ?, 'active')
-            ''', (user_id, business_id, strategy, amount, expected_return, matures_at))
+                INSERT INTO investments (
+                    user_id, business_id, strategy, amount, expected_return,
+                    matures_at, status, current_value, volatility, last_price_update
+                )
+                VALUES (?, ?, ?, ?, ?, ?, 'active', ?, ?, CURRENT_TIMESTAMP)
+            ''', (user_id, business_id, strategy, amount, expected_return, matures_at, amount, strategy_volatility))
             investment_id = cursor.lastrowid
             conn.commit()
             conn.close()
@@ -615,7 +645,8 @@ class GameDatabase:
             conn = sqlite3.connect(self.db_path)
             cursor = conn.cursor()
             cursor.execute('''
-                SELECT id, business_id, strategy, amount, expected_return, created_at, matures_at, status
+                SELECT id, business_id, strategy, amount, expected_return, created_at, matures_at, status,
+                       COALESCE(current_value, amount) as current_value, COALESCE(volatility, 0.05) as volatility
                 FROM investments WHERE user_id = ? AND status IN ('active','matured')
                 ORDER BY created_at DESC
             ''', (user_id,))
@@ -631,7 +662,9 @@ class GameDatabase:
                     'expected_return': row[4],
                     'created_at': row[5],
                     'matures_at': row[6],
-                    'status': row[7]
+                    'status': row[7],
+                    'current_value': row[8],
+                    'volatility': row[9]
                 })
             return result
         except Exception as e:
@@ -658,18 +691,19 @@ class GameDatabase:
             conn = sqlite3.connect(self.db_path)
             cursor = conn.cursor()
             cursor.execute('''
-                SELECT amount, expected_return, status FROM investments
+                SELECT amount, expected_return, status, COALESCE(current_value, amount) as current_value FROM investments
                 WHERE id = ? AND user_id = ?
             ''', (investment_id, user_id))
             row = cursor.fetchone()
             if not row:
                 conn.close()
                 return None
-            amount, expected_return, status = row
+            amount, expected_return, status, current_value = row
             if status != 'matured':
                 conn.close()
                 return None
-            total = amount + expected_return
+            # Выплачиваем текущую стоимость (динамическую)
+            total = max(0.0, float(current_value))
             cursor.execute('''
                 UPDATE investments SET status = 'claimed' WHERE id = ? AND user_id = ?
             ''', (investment_id, user_id))
@@ -678,6 +712,67 @@ class GameDatabase:
             return total
         except Exception as e:
             print(f"Ошибка при получении инвестиции: {e}")
+            return None
+
+    def update_investment_prices(self) -> bool:
+        """Случайно обновляет стоимость активных инвестиций в пределах волатильности."""
+        try:
+            conn = sqlite3.connect(self.db_path)
+            cursor = conn.cursor()
+            cursor.execute('''
+                SELECT id, COALESCE(current_value, amount) as current_value, COALESCE(volatility, 0.05) as volatility
+                FROM investments
+                WHERE status = 'active'
+            ''')
+            rows = cursor.fetchall()
+            for inv_id, current_value, volatility in rows:
+                try:
+                    current_value = float(current_value or 0)
+                    volatility = float(volatility or 0.05)
+                    # Случайное изменение в диапазоне [-volatility, +volatility]
+                    change_ratio = random.uniform(-volatility, volatility)
+                    new_value = max(0.0, current_value * (1.0 + change_ratio))
+                    cursor.execute('''
+                        UPDATE investments
+                        SET current_value = ?, last_price_update = CURRENT_TIMESTAMP
+                        WHERE id = ?
+                    ''', (new_value, inv_id))
+                except Exception as _:
+                    continue
+            conn.commit()
+            conn.close()
+            return True
+        except Exception as e:
+            print(f"Ошибка при обновлении стоимости инвестиций: {e}")
+            return False
+
+    def withdraw_investment(self, user_id: int, investment_id: int) -> Optional[Tuple[float, str]]:
+        """Досрочный вывод средств. Возвращает (сумма_к_выплате, статус_до) или None."""
+        try:
+            conn = sqlite3.connect(self.db_path)
+            cursor = conn.cursor()
+            cursor.execute('''
+                SELECT status, COALESCE(current_value, amount) as current_value
+                FROM investments
+                WHERE id = ? AND user_id = ? AND status IN ('active','matured')
+            ''', (investment_id, user_id))
+            row = cursor.fetchone()
+            if not row:
+                conn.close()
+                return None
+            status, current_value = row
+            current_value = max(0.0, float(current_value))
+            # Штраф 5% при досрочном выводе, без штрафа если уже matured
+            penalty = 0.0 if status == 'matured' else 0.05
+            payout = max(0.0, current_value * (1.0 - penalty))
+            cursor.execute('''
+                UPDATE investments SET status = 'withdrawn' WHERE id = ? AND user_id = ?
+            ''', (investment_id, user_id))
+            conn.commit()
+            conn.close()
+            return (payout, status)
+        except Exception as e:
+            print(f"Ошибка при досрочном выводе инвестиций: {e}")
             return None
 
     # ------------------- Вспомогательные обновления игрока -------------------
