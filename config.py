@@ -14,6 +14,20 @@ if _admins_env:
     except Exception:
         ADMIN_IDS = []
 
+# Донаты: ссылки из переменных окружения
+DONATE_LINKS = {}
+_donate_env_map = {
+    'Boosty': 'DONATE_BOOSTY',
+    'DonationAlerts': 'DONATE_DONATIONALERTS',
+    'BuyMeACoffee': 'DONATE_BUYMEACOFFEE',
+    'USDT': 'DONATE_USDT',
+    'TON': 'DONATE_TON'
+}
+for _name, _env in _donate_env_map.items():
+    _val = os.getenv(_env, '').strip()
+    if _val:
+        DONATE_LINKS[_name] = _val
+
 # Игровые параметры
 STARTING_BALANCE = 10000  # Начальный баланс игрока
 DAILY_INCOME_MULTIPLIER = 0.1  # Множитель дневного дохода

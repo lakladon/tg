@@ -54,8 +54,9 @@ def get_main_menu_keyboard(user_id: int = None):
     keyboard.add(InlineKeyboardButton(text="💼 Инвестиции", callback_data="investments"))
     keyboard.add(InlineKeyboardButton(text="⚔️ PvP", callback_data="pvp"))
     keyboard.row(InlineKeyboardButton(text="ℹ️ Помощь", callback_data="help"))
+    keyboard.row(InlineKeyboardButton(text="💖 Донат", callback_data="donate"))
     # Увеличиваем количество кнопок в строке: 3-3-3-3 кнопки для более компактного отображения
-    keyboard.adjust(3, 3, 3, 3, 1)
+    keyboard.adjust(3, 3, 3, 3, 1, 1)
     return keyboard.as_markup()
 
 def get_business_choice_keyboard():
@@ -153,6 +154,7 @@ async def cmd_help(message: types.Message):
 /businesses - Ваши бизнесы
 /rating - Рейтинг игроков
 /achievements - Достижения
+/donate - Поддержать проект
 
 *Как играть:*
 1. Выберите тип бизнеса
@@ -231,6 +233,30 @@ async def admin_router(callback: types.CallbackQuery, state: FSMContext):
             nm = row['first_name'] or row['username']
             text += f"{row['rank']}. {nm} — {row['rating']:.0f} (W:{row['wins']}/L:{row['losses']})\n"
         await callback.message.edit_text(text)
+
+@router.message(Command("donate"))
+async def cmd_donate(message: types.Message):
+    from config import DONATE_LINKS
+    if not DONATE_LINKS:
+        await message.answer("Пока нет доступных ссылок для доната.")
+        return
+    kb = InlineKeyboardBuilder()
+    for name, url in DONATE_LINKS.items():
+        kb.add(InlineKeyboardButton(text=f"💖 {name}", url=url))
+    kb.adjust(1)
+    await message.answer("Поддержать проект:", reply_markup=kb.as_markup())
+
+@router.callback_query(F.data == "donate")
+async def cb_donate(callback: types.CallbackQuery):
+    from config import DONATE_LINKS
+    if not DONATE_LINKS:
+        await callback.answer("Ссылки для доната не настроены", show_alert=True)
+        return
+    kb = InlineKeyboardBuilder()
+    for name, url in DONATE_LINKS.items():
+        kb.add(InlineKeyboardButton(text=f"💖 {name}", url=url))
+    kb.adjust(1)
+    await callback.message.answer("Поддержать проект:", reply_markup=kb.as_markup())
 
 # Обработчики callback-запросов
 @router.callback_query(F.data.startswith("business_"))
@@ -1372,6 +1398,7 @@ async def show_help(callback: types.CallbackQuery):
 /businesses - Ваши бизнесы
 /rating - Рейтинг игроков
 /achievements - Достижения
+/donate - Поддержать проект
 
 *Как играть:*
 1. Выберите тип бизнеса
