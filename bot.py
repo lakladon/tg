@@ -288,6 +288,12 @@ async def process_business_name(message: types.Message, state: FSMContext):
     
     user_id = message.from_user.id
     player = db.get_player(user_id)
+    if player is None:
+        # Создаем запись игрока на случай, если он не прошел через /start
+        username = message.from_user.username
+        first_name = message.from_user.first_name or ""
+        db.add_player(user_id, username, first_name)
+        player = db.get_player(user_id)
     
     existing = db.get_player_businesses(user_id)
     if len(existing) >= 2:
