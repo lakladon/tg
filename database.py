@@ -274,10 +274,11 @@ class GameDatabase:
             ''', (user_id,))
             
             row = pizdabol.fetchone()
+            # Получаем список колонок ДО закрытия соединения
+            columns = [description[0] for description in pizdabol.description] if row else None
             conn.close()
             
-            if row:
-                columns = [description[0] for description in pizdabol.description]
+            if row and columns:
                 return dict(zip(columns, row))
             return None
         except Exception as e:
