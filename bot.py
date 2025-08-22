@@ -308,14 +308,19 @@ async def process_business_name(message: types.Message, state: FSMContext):
         startup_cost = business_info['base_expenses'] * 10  # Стоимость запуска
         db.update_player_balance(user_id, -startup_cost, "business_startup", f"Запуск бизнеса '{business_name}'")
         
+        # Обновим данные игрока после списания и экранируем название бизнеса для HTML
+        updated_player = db.get_player(user_id)
+        current_balance = updated_player['balance'] if updated_player and 'balance' in updated_player else 0
+        safe_business_name = html.escape(business_name)
+        
         await state.set_state(GameStates.main_menu)
         await message.answer(
-            f"🎉 Поздравляем! Ваш бизнес *{business_name}* успешно создан!\n\n"
+            f"🎉 Поздравляем! Ваш бизнес <b>{safe_business_name}</b> успешно создан!\n\n"
             f"💰 Стоимость запуска: {startup_cost:,.0f} ₽\n"
-            f"💵 Текущий баланс: {(player['balance'] - startup_cost):,.0f} ₽\n\n"
+            f"💵 Текущий баланс: {current_balance:,.0f} ₽\n\n"
             f"Теперь вы можете управлять своим бизнесом!",
             reply_markup=get_main_menu_keyboard(),
-            parse_mode="Markdown"
+            parse_mode="HTML"
         )
     else:
         await message.answer("Произошла ошибка при создании бизнеса. Попробуйте еще раз.")

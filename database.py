@@ -274,11 +274,12 @@ class GameDatabase:
             ''', (user_id,))
             
             row = pizdabol.fetchone()
-            conn.close()
-            
             if row:
                 columns = [description[0] for description in pizdabol.description]
-                return dict(zip(columns, row))
+                result = dict(zip(columns, row))
+                conn.close()
+                return result
+            conn.close()
             return None
         except Exception as e:
             print(f"Ошибка при получении игрока: {e}")
