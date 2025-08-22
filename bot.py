@@ -288,6 +288,10 @@ async def process_business_name(message: types.Message, state: FSMContext):
     
     user_id = message.from_user.id
     player = db.get_player(user_id)
+    # Гарантируем, что запись игрока существует (редкие случаи рассинхронизации)
+    if not player:
+        db.add_player(user_id, message.from_user.username or "Unknown", message.from_user.first_name or "Player")
+        player = db.get_player(user_id)
     
     existing = db.get_player_businesses(user_id)
     if len(existing) >= 2:
@@ -313,12 +317,12 @@ async def process_business_name(message: types.Message, state: FSMContext):
         
         await state.set_state(GameStates.main_menu)
         await message.answer(
-            f"🎉 Поздравляем! Ваш бизнес *{business_name}* успешно создан!\n\n"
+            f"🎉 Поздравляем! Ваш бизнес <b>{html.escape(business_name)}</b> успешно создан!\n\n"
             f"💰 Стоимость запуска: {startup_cost:,.0f} ₽\n"
             f"💵 Текущий баланс: {player['balance']:,.0f} ₽\n\n"
             f"Теперь вы можете управлять своим бизнесом!",
             reply_markup=get_main_menu_keyboard(),
-            parse_mode="Markdown"
+            parse_mode="HTML"
         )
     else:
         await message.answer("Произошла ошибка при создании бизнеса. Попробуйте еще раз.")
