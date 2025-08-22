@@ -9,7 +9,7 @@ from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, ReplyKeybo
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 import html
 
-from config import BOT_TOKEN, BUSINESS_TYPES, IMPROVEMENTS, ADMIN_IDS
+from config import BOT_TOKEN, BUSINESS_TYPES, IMPROVEMENTS, ADMIN_IDS, DONATE_URL
 from database import GameDatabase
 from game_logic import GameLogic
 from advanced_features import AdvancedGameFeatures
@@ -53,9 +53,10 @@ def get_main_menu_keyboard(user_id: int = None):
     keyboard.add(InlineKeyboardButton(text="🏦 Кредиты", callback_data="loans"))
     keyboard.add(InlineKeyboardButton(text="💼 Инвестиции", callback_data="investments"))
     keyboard.add(InlineKeyboardButton(text="⚔️ PvP", callback_data="pvp"))
+    keyboard.add(InlineKeyboardButton(text="💖 Донат", callback_data="donate"))
     keyboard.row(InlineKeyboardButton(text="ℹ️ Помощь", callback_data="help"))
-    # Увеличиваем количество кнопок в строке: 3-3-3-3 кнопки для более компактного отображения
-    keyboard.adjust(3, 3, 3, 3, 1)
+    # Увеличиваем количество кнопок в строке: 3-3-3-3-2 кнопки для более компактного отображения
+    keyboard.adjust(3, 3, 3, 3, 2)
     return keyboard.as_markup()
 
 def get_business_choice_keyboard():
@@ -231,6 +232,25 @@ async def admin_router(callback: types.CallbackQuery, state: FSMContext):
             nm = row['first_name'] or row['username']
             text += f"{row['rank']}. {nm} — {row['rating']:.0f} (W:{row['wins']}/L:{row['losses']})\n"
         await callback.message.edit_text(text)
+
+@router.message(Command("donate"))
+async def cmd_donate(message: types.Message):
+    kb = InlineKeyboardBuilder()
+    kb.add(InlineKeyboardButton(text="Поддержать проект 💖", url=DONATE_URL))
+    await message.answer(
+        "Спасибо за поддержку! Любая сумма помогает развивать игру 🙏",
+        reply_markup=kb.as_markup()
+    )
+
+@router.callback_query(F.data == "donate")
+async def donate_callback(callback: types.CallbackQuery):
+    kb = InlineKeyboardBuilder()
+    kb.add(InlineKeyboardButton(text="Перейти к донату 💖", url=DONATE_URL))
+    await callback.message.answer(
+        "Спасибо за желание поддержать проект!",
+        reply_markup=kb.as_markup()
+    )
+    await callback.answer()
 
 # Обработчики callback-запросов
 @router.callback_query(F.data.startswith("business_"))

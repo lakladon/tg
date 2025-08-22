@@ -1,5 +1,10 @@
 import os
-from dotenv import load_dotenv
+
+try:
+	from dotenv import load_dotenv
+except Exception:
+	def load_dotenv(*args, **kwargs):
+		return False
 
 load_dotenv()
 
@@ -128,4 +133,7 @@ IMPROVEMENTS = {
         'expense_boost': 0.3,
         'description': '+50% к доходу, +30% к расходам'
     }
-} 
+}
+
+# Донат/поддержка
+DONATE_URL = os.getenv('DONATE_URL', 'https://buymeacoffee.com/your_page') 
