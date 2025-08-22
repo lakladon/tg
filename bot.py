@@ -264,14 +264,14 @@ async def process_business_choice(callback: types.CallbackQuery, state: FSMConte
     await state.update_data(business_type=business_type)
     
     await callback.message.edit_text(
-        f"🎯 Вы выбрали: {business_info['emoji']} *{business_info['name']}*\n\n"
+        f"🎯 Вы выбрали: {business_info['emoji']} <b>{business_info['name']}</b>\n\n"
         f"📝 {business_info['description']}\n"
         f"💰 Базовый доход: {business_info['base_income']:,} ₽/день\n"
         f"💸 Базовые расходы: {business_info['base_expenses']:,} ₽/день\n"
         f"📈 Скорость роста: {business_info['growth_rate']}x\n"
         f"⚠️ Уровень риска: {business_info['risk_level']}\n\n"
         f"Теперь придумайте название для вашего бизнеса:",
-        parse_mode="Markdown"
+        parse_mode="HTML"
     )
 
 @router.message(GameStates.business_name)
