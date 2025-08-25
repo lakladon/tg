@@ -1,10 +1,10 @@
 import os
 
 try:
-	from dotenv import load_dotenv
+    from dotenv import load_dotenv
 except Exception:
-	def load_dotenv(*args, **kwargs):
-		return False
+    def load_dotenv(*args, **kwargs):
+        return False
 
 load_dotenv()
 
@@ -70,6 +70,51 @@ BUSINESS_TYPES = {
         'growth_rate': 1.1,
         'risk_level': 'low',
         'description': 'Сельскохозяйственное хозяйство'
+    },
+    'retail_store': {
+        'name': 'Магазин',
+        'emoji': '🛍️',
+        'base_income': 1200,
+        'base_expenses': 600,
+        'growth_rate': 1.15,
+        'risk_level': 'low',
+        'description': 'Розничная торговля повседневными товарами'
+    },
+    'hotel': {
+        'name': 'Отель',
+        'emoji': '🏨',
+        'base_income': 3500,
+        'base_expenses': 2000,
+        'growth_rate': 1.25,
+        'risk_level': 'medium',
+        'description': 'Гостиничный бизнес для туристов и деловых поездок'
+    },
+    'construction': {
+        'name': 'Строительная компания',
+        'emoji': '🚧',
+        'base_income': 6000,
+        'base_expenses': 4000,
+        'growth_rate': 1.4,
+        'risk_level': 'high',
+        'description': 'Проектирование и строительство объектов'
+    },
+    'ecommerce': {
+        'name': 'Онлайн-магазин',
+        'emoji': '🛒',
+        'base_income': 2500,
+        'base_expenses': 700,
+        'growth_rate': 1.6,
+        'risk_level': 'medium',
+        'description': 'Интернет-торговля с широким ассортиментом'
+    },
+    'fitness_club': {
+        'name': 'Фитнес-клуб',
+        'emoji': '🏋️',
+        'base_income': 1800,
+        'base_expenses': 900,
+        'growth_rate': 1.2,
+        'risk_level': 'low',
+        'description': 'Спортивный клуб с абонементами и персональными тренировками'
     }
 }
 
@@ -136,4 +181,5 @@ IMPROVEMENTS = {
 }
 
 # Донат/поддержка
-DONATE_URL = os.getenv('DONATE_URL', 'https://buymeacoffee.com/your_page') 
+DONATE_URL = os.getenv('DONATE_URL', 'https://buymeacoffee.com/your_page')
+
