@@ -468,12 +468,18 @@ async def improvements_menu(callback: types.CallbackQuery):
 async def loans_menu(callback: types.CallbackQuery):
     user_id = callback.from_user.id
     player = db.get_player(user_id)
+    # Перед показом начислим проценты и пени
+    try:
+        db.accrue_interest_for_user(user_id)
+    except Exception as _e:
+        pass
     loans = db.get_active_loans(user_id)
     text = "🏦 Кредиты\n\n"
     if loans:
         for l in loans:
+            overdue_mark = " ⏰ ПРОСРОЧКА" if l.get('overdue') else ""
             text += (f"#{l['id']}: Остаток {l['remaining']:,.0f} ₽ | Ставка {l['interest_rate']*100:.1f}%/д | "+
-                     f"До {l['due_date'][:10]}\n")
+                     f"До {l['due_date'][:10]}{overdue_mark}\n")
     else:
         text += "Активных кредитов нет\n"
     text += "\nВыберите действие:"
