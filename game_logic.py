@@ -188,7 +188,12 @@ class GameLogic:
             'restaurant': ['Gourmet Palace', 'Taste Haven', 'Culinary Delight', 'Flavor Fusion'],
             'factory': ['Industrial Power', 'Production Pro', 'Manufacturing Hub', 'Factory Force'],
             'it_startup': ['Tech Vision', 'Digital Dreams', 'Innovation Lab', 'Future Tech'],
-            'farm': ['Green Fields', 'Nature\'s Bounty', 'Organic Harvest', 'Farm Fresh']
+            'farm': ['Green Fields', 'Nature\'s Bounty', 'Organic Harvest', 'Farm Fresh'],
+            'retail_store': ['Daily Deals', 'Value Mart', 'City Market', 'Smart Shop'],
+            'hotel': ['Grand Stay', 'City Inn', 'Royal Suites', 'Comfort Lodge'],
+            'construction': ['BuildRight', 'UrbanConstruct', 'ProBuild Group', 'Solid Foundations'],
+            'ecommerce': ['ShopSphere', 'ClickCart', 'MegaMarket', 'SwiftShop'],
+            'fitness_club': ['PowerFit', 'Elite Gym', 'BodyWorks', 'FitNation']
         }
         
         if business_type in names:
