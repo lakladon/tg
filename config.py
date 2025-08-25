@@ -70,6 +70,51 @@ BUSINESS_TYPES = {
         'growth_rate': 1.1,
         'risk_level': 'low',
         'description': 'Сельскохозяйственное хозяйство'
+    },
+    'retail_store': {
+        'name': 'Магазин розницы',
+        'emoji': '🛍️',
+        'base_income': 1500,
+        'base_expenses': 900,
+        'growth_rate': 1.25,
+        'risk_level': 'medium',
+        'description': 'Торговая точка с популярными товарами'
+    },
+    'logistics': {
+        'name': 'Логистика',
+        'emoji': '🚚',
+        'base_income': 2200,
+        'base_expenses': 1300,
+        'growth_rate': 1.3,
+        'risk_level': 'medium',
+        'description': 'Перевозки и складская дистрибуция'
+    },
+    'clinic': {
+        'name': 'Клиника',
+        'emoji': '🏥',
+        'base_income': 2600,
+        'base_expenses': 1800,
+        'growth_rate': 1.2,
+        'risk_level': 'low',
+        'description': 'Частная медицинская клиника'
+    },
+    'online_education': {
+        'name': 'Онлайн-образование',
+        'emoji': '🎓',
+        'base_income': 1800,
+        'base_expenses': 600,
+        'growth_rate': 1.7,
+        'risk_level': 'high',
+        'description': 'Платформа курсов и вебинаров'
+    },
+    'construction': {
+        'name': 'Строительная компания',
+        'emoji': '🏗️',
+        'base_income': 4200,
+        'base_expenses': 2800,
+        'growth_rate': 1.35,
+        'risk_level': 'high',
+        'description': 'Проекты строительства и ремонта'
     }
 }
 
