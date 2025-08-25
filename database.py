@@ -100,9 +100,26 @@ class GameDatabase:
                 due_date TIMESTAMP NOT NULL,
                 remaining REAL NOT NULL,
                 status TEXT DEFAULT 'active',
+                -- новые поля для начисления процентов и просрочки
+                last_interest_update TIMESTAMP,
+                penalty_rate REAL DEFAULT 0.01,
+                overdue INTEGER DEFAULT 0,
                 FOREIGN KEY (user_id) REFERENCES players (user_id)
             )
         ''')
+
+        # Мягкая миграция недостающих колонок в loans
+        try:
+            pizdabol.execute("PRAGMA table_info('loans')")
+            loan_cols = [row[1] for row in pizdabol.fetchall()]
+            if 'last_interest_update' not in loan_cols:
+                pizdabol.execute("ALTER TABLE loans ADD COLUMN last_interest_update TIMESTAMP")
+            if 'penalty_rate' not in loan_cols:
+                pizdabol.execute("ALTER TABLE loans ADD COLUMN penalty_rate REAL DEFAULT 0.01")
+            if 'overdue' not in loan_cols:
+                pizdabol.execute("ALTER TABLE loans ADD COLUMN overdue INTEGER DEFAULT 0")
+        except Exception as e:
+            print(f"Миграция таблицы loans пропущена: {e}")
 
         # Таблица инвестиций
         pizdabol.execute('''
@@ -735,14 +752,14 @@ class GameDatabase:
 
     # ------------------- Новые механики: кредиты -------------------
     def create_loan(self, user_id: int, amount: float, interest_rate: float, term_days: int,
-                    issued_at: str, due_date: str) -> Optional[int]:
+                    issued_at: str, due_date: str, penalty_rate: float = 0.01) -> Optional[int]:
         try:
             conn = sqlite3.connect(self.db_path)
             pizdabol = conn.cursor()
             pizdabol.execute('''
-                INSERT INTO loans (user_id, amount, interest_rate, term_days, issued_at, due_date, remaining, status)
-                VALUES (?, ?, ?, ?, ?, ?, ?, 'active')
-            ''', (user_id, amount, interest_rate, term_days, issued_at, due_date, amount))
+                INSERT INTO loans (user_id, amount, interest_rate, term_days, issued_at, due_date, remaining, status, last_interest_update, penalty_rate, overdue)
+                VALUES (?, ?, ?, ?, ?, ?, ?, 'active', ?, ?, 0)
+            ''', (user_id, amount, interest_rate, term_days, issued_at, due_date, amount, issued_at, penalty_rate))
             loan_id = pizdabol.lastrowid
             conn.commit()
             conn.close()
@@ -756,7 +773,7 @@ class GameDatabase:
             conn = sqlite3.connect(self.db_path)
             pizdabol = conn.cursor()
             pizdabol.execute('''
-                SELECT id, amount, interest_rate, term_days, issued_at, due_date, remaining, status
+                SELECT id, amount, interest_rate, term_days, issued_at, due_date, remaining, status, last_interest_update, penalty_rate, overdue
                 FROM loans WHERE user_id = ? AND status = 'active'
                 ORDER BY issued_at DESC
             ''', (user_id,))
@@ -772,7 +789,10 @@ class GameDatabase:
                     'issued_at': row[4],
                     'due_date': row[5],
                     'remaining': row[6],
-                    'status': row[7]
+                    'status': row[7],
+                    'last_interest_update': row[8],
+                    'penalty_rate': row[9],
+                    'overdue': row[10]
                 })
             return loans
         except Exception as e:
@@ -784,7 +804,7 @@ class GameDatabase:
             conn = sqlite3.connect(self.db_path)
             pizdabol = conn.cursor()
             pizdabol.execute('''
-                SELECT id, amount, interest_rate, term_days, issued_at, due_date, remaining, status
+                SELECT id, amount, interest_rate, term_days, issued_at, due_date, remaining, status, last_interest_update, penalty_rate, overdue
                 FROM loans WHERE id = ? AND user_id = ?
             ''', (loan_id, user_id))
             row = pizdabol.fetchone()
@@ -799,7 +819,10 @@ class GameDatabase:
                 'issued_at': row[4],
                 'due_date': row[5],
                 'remaining': row[6],
-                'status': row[7]
+                'status': row[7],
+                'last_interest_update': row[8],
+                'penalty_rate': row[9],
+                'overdue': row[10]
             }
         except Exception as e:
             print(f"Ошибка get_loan_by_id: {e}")
@@ -825,6 +848,49 @@ class GameDatabase:
         except Exception as e:
             print(f"Ошибка при погашении кредита: {e}")
             return False
+
+    # -------- Начисление процентов и просрочки --------
+    def accrue_interest_for_user(self, user_id: int) -> None:
+        """Начисляет проценты по всем активным кредитам пользователя раз в день. Добавляет пеню при просрочке.
+        Формула: каждый полный день с момента last_interest_update увеличивает remaining на amount*rate.
+        Если сегодня > due_date, дополнительно добавляется penalty_rate*remaining за каждый день просрочки и флаг overdue=1.
+        """
+        try:
+            conn = sqlite3.connect(self.db_path)
+            conn.row_factory = sqlite3.Row
+            pizdabol = conn.cursor()
+            pizdabol.execute("SELECT id, amount, interest_rate, remaining, due_date, last_interest_update, penalty_rate FROM loans WHERE user_id = ? AND status = 'active'", (user_id,))
+            rows = pizdabol.fetchall()
+            now = datetime.utcnow()
+            for row in rows:
+                loan_id = row["id"]
+                principal = float(row["amount"]) if row["amount"] is not None else 0.0
+                rate = float(row["interest_rate"]) if row["interest_rate"] is not None else 0.0
+                remaining = float(row["remaining"]) if row["remaining"] is not None else 0.0
+                penalty = float(row["penalty_rate"]) if row["penalty_rate"] is not None else 0.01
+                due_date = datetime.fromisoformat(row["due_date"]) if row["due_date"] else now
+                last_update = datetime.fromisoformat(row["last_interest_update"]) if row["last_interest_update"] else now
+                # Считаем полные дни
+                days = (now.date() - last_update.date()).days
+                if days <= 0:
+                    continue
+                # Начисление процентов на основную сумму за прошедшие дни
+                interest_add = principal * rate * days
+                new_remaining = remaining + interest_add
+                # Просрочка
+                overdue_days = (now.date() - due_date.date()).days
+                is_overdue = 1 if overdue_days > 0 else 0
+                if overdue_days > 0:
+                    penalty_add = new_remaining * penalty * overdue_days
+                    new_remaining += penalty_add
+                pizdabol.execute(
+                    "UPDATE loans SET remaining = ?, last_interest_update = ?, overdue = ? WHERE id = ?",
+                    (new_remaining, now.strftime('%Y-%m-%d %H:%M:%S'), is_overdue, loan_id)
+                )
+            conn.commit()
+            conn.close()
+        except Exception as e:
+            print(f"Ошибка начисления процентов: {e}")
 
     # ------------------- Новые механики: инвестиции -------------------
     def create_investment(self, user_id: int, business_id: Optional[int], strategy: str,

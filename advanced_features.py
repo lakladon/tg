@@ -60,7 +60,11 @@ class AdvancedGameFeatures:
     def calculate_loan_eligibility(self, player: Dict, loan_amount: float) -> Dict:
         """Расчет возможности получения кредита"""
         credit_score = self._calculate_credit_score(player)
-        max_loan = player['balance'] * 2  # Максимум 2x от баланса
+        # Новый лимит: зависит от уровня и популярности, c мягким капом
+        base_cap = max(player['balance'], 10_000)
+        popularity_multiplier = 1.0 + min(player.get('popularity', 1.0) - 1.0, 1.0)
+        level_multiplier = 1.0 + (player.get('level', 1) - 1) * 0.2
+        max_loan = min(base_cap * popularity_multiplier * level_multiplier, 1_000_000)
         
         if loan_amount > max_loan:
             return {
@@ -104,14 +108,15 @@ class AdvancedGameFeatures:
     
     def _get_interest_rate(self, credit_score: int) -> float:
         """Получение процентной ставки по кредиту"""
+        # Пониженные базовые ставки
         if credit_score >= 800:
-            return 0.02  # 2% в день
+            return 0.015  # 1.5% в день
         elif credit_score >= 600:
-            return 0.03  # 3% в день
+            return 0.025  # 2.5% в день
         elif credit_score >= 400:
-            return 0.04  # 4% в день
+            return 0.035  # 3.5% в день
         else:
-            return 0.05  # 5% в день
+            return 0.05   # 5% в день
     
     def process_loan(self, player: Dict, loan_amount: float, term_days: int) -> Dict:
         """Обработка выдачи кредита"""
@@ -134,7 +139,8 @@ class AdvancedGameFeatures:
             'total_interest': total_interest,
             'total_payment': total_payment,
             'issued_at': datetime.now(),
-            'due_date': datetime.now() + timedelta(days=term_days)
+            'due_date': datetime.now() + timedelta(days=term_days),
+            'penalty_rate': 0.01
         }
         
         return {
