@@ -18,6 +18,19 @@ from advanced_features import AdvancedGameFeatures
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+def safe_html_text(text: str) -> str:
+    """Безопасно экранирует текст для HTML"""
+    if not text:
+        return ""
+    # Экранируем основные HTML символы
+    text = str(text)
+    text = text.replace('&', '&amp;')
+    text = text.replace('<', '&lt;')
+    text = text.replace('>', '&gt;')
+    text = text.replace('"', '&quot;')
+    text = text.replace("'", '&#39;')
+    return text
+
 # Инициализация бота и диспетчера
 bot = Bot(token=BOT_TOKEN)
 dp = Dispatcher()
@@ -263,16 +276,35 @@ async def process_business_choice(callback: types.CallbackQuery, state: FSMConte
     await state.set_state(GameStates.business_name)
     await state.update_data(business_type=business_type)
     
-    await callback.message.edit_text(
-        f"🎯 Вы выбрали: {business_info['emoji']} <b>{business_info['name']}</b>\n\n"
-        f"📝 {business_info['description']}\n"
-        f"💰 Базовый доход: {business_info['base_income']:,} ₽/день\n"
-        f"💸 Базовые расходы: {business_info['base_expenses']:,} ₽/день\n"
-        f"📈 Скорость роста: {business_info['growth_rate']}x\n"
-        f"⚠️ Уровень риска: {business_info['risk_level']}\n\n"
-        f"Теперь придумайте название для вашего бизнеса:",
-        parse_mode="HTML"
-    )
+    # Создаем безопасный текст для HTML
+    business_name_safe = safe_html_text(business_info['name'])
+    description_safe = safe_html_text(business_info['description'])
+    risk_level_safe = safe_html_text(business_info['risk_level'])
+    
+    # Создаем безопасный emoji (проверяем, что это валидный символ)
+    emoji_safe = business_info['emoji'] if business_info['emoji'] and len(business_info['emoji']) <= 4 else "🏢"
+    
+    # Создаем текст для отладки
+    debug_text = f"🎯 Вы выбрали: {emoji_safe} <b>{business_name_safe}</b>\n\n"
+    debug_text += f"📝 {description_safe}\n"
+    debug_text += f"💰 Базовый доход: {business_info['base_income']:,} ₽/день\n"
+    debug_text += f"💸 Базовые расходы: {business_info['base_expenses']:,} ₽/день\n"
+    debug_text += f"📈 Скорость роста: {business_info['growth_rate']}x\n"
+    debug_text += f"⚠️ Уровень риска: {risk_level_safe}\n\n"
+    debug_text += f"Теперь придумайте название для вашего бизнеса:"
+    
+    # Логируем текст для отладки
+    logger.info(f"Business choice text length: {len(debug_text)}")
+    logger.info(f"Business choice text: {repr(debug_text)}")
+    
+    try:
+        await callback.message.edit_text(debug_text, parse_mode="HTML")
+    except Exception as e:
+        # Если HTML парсинг не удался, используем обычный текст
+        logger.warning(f"HTML parsing failed for business choice: {e}")
+        # Убираем HTML теги
+        safe_text = debug_text.replace('<b>', '').replace('</b>', '')
+        await callback.message.edit_text(safe_text)
 
 @router.message(GameStates.business_name)
 async def process_business_name(message: types.Message, state: FSMContext):
@@ -280,6 +312,23 @@ async def process_business_name(message: types.Message, state: FSMContext):
     business_name = message.text.strip()
     if len(business_name) < 2:
         await message.answer("Название должно содержать минимум 2 символа. Попробуйте еще раз:")
+        return
+    
+    # Проверяем на наличие потенциально опасных символов
+    dangerous_chars = ['<', '>', '&', '"', "'"]
+    if any(char in business_name for char in dangerous_chars):
+        await message.answer("Название содержит недопустимые символы. Используйте только буквы, цифры и обычные знаки препинания.")
+        return
+    
+    # Проверяем длину названия
+    if len(business_name) > 50:
+        await message.answer("Название слишком длинное. Максимум 50 символов.")
+        return
+    
+    # Проверяем, что название содержит только допустимые символы
+    import re
+    if not re.match(r'^[а-яёa-z0-9\s\-_.,!?()]+$', business_name, re.IGNORECASE):
+        await message.answer("Название содержит недопустимые символы. Используйте только буквы, цифры, пробелы и знаки препинания.")
         return
     
     data = await state.get_data()
@@ -651,18 +700,28 @@ async def pvp_menu(callback: types.CallbackQuery):
     for op in opponents:
         if op['user_id'] != user_id:
             name = op['first_name'] or op['username']
-            text += f"{name} (ур. {op['level']} | {op['balance']:,.0f} ₽)\n"
-            keyboard.add(InlineKeyboardButton(text=f"Сразиться с {name}", callback_data=f"pvp_fight_{op['user_id']}"))
+            name_safe = safe_html_text(name) if name else "Игрок"
+            text += f"{name_safe} (ур. {op['level']} | {op['balance']:,.0f} ₽)\n"
+            keyboard.add(InlineKeyboardButton(text=f"Сразиться с {name_safe}", callback_data=f"pvp_fight_{op['user_id']}"))
     # Топ по PvP рейтингу
     pvp_top = db.get_pvp_top(5)
     if pvp_top:
         text += "\n<b>Топ PvP:</b>\n"
         for row in pvp_top:
             nm = row['first_name'] or row['username']
-            text += f"{row['rank']}. {nm} — {row['rating']:.0f} (W:{row['wins']}/L:{row['losses']})\n"
+            nm_safe = safe_html_text(nm) if nm else "Игрок"
+            text += f"{row['rank']}. {nm_safe} — {row['rating']:.0f} (W:{row['wins']}/L:{row['losses']})\n"
     keyboard.row(InlineKeyboardButton(text="🔙 Главное меню", callback_data="main_menu"))
     keyboard.adjust(1)
-    await callback.message.edit_text(text, reply_markup=keyboard.as_markup(), parse_mode="HTML")
+    
+    try:
+        await callback.message.edit_text(text, reply_markup=keyboard.as_markup(), parse_mode="HTML")
+    except Exception as e:
+        # Если HTML парсинг не удался, используем обычный текст
+        logger.warning(f"HTML parsing failed for PvP menu: {e}")
+        # Убираем HTML теги из текста
+        text_safe = text.replace('<b>', '').replace('</b>', '')
+        await callback.message.edit_text(text_safe, reply_markup=keyboard.as_markup())
 
 @router.callback_query(F.data.startswith("pvp_fight_"))
 async def pvp_fight(callback: types.CallbackQuery):
@@ -1039,21 +1098,29 @@ async def show_rating(callback: types.CallbackQuery):
     for p in top_players:
         medal = "🥇" if p['rank'] == 1 else "🥈" if p['rank'] == 2 else "🥉" if p['rank'] == 3 else f"{p['rank']}."
         username_raw = p['first_name'] or p['username'] or "Игрок"
-        username = html.escape(username_raw)
+        username = safe_html_text(username_raw)
         # Берем лучший бизнес по доходу (если есть)
         businesses = db.get_player_businesses(p['user_id'])
         biz_part = ""
         if businesses:
             best = max(businesses, key=lambda b: b.get('income', 0) or 0)
             b_type = BUSINESS_TYPES.get(best['business_type'], {'emoji': '🏢', 'name': 'Бизнес'})
-            b_name = html.escape(best['name'])
+            b_name = safe_html_text(best['name'])
             biz_part = f"\n{b_type['emoji']} {b_name} — {b_type['name']}"
         rating_text += f"{medal} {username}{biz_part}\n"
         rating_text += f"💰 {p['balance']:,.0f} ₽ | ⭐ Уровень {p['level']}\n\n"
 
     keyboard = InlineKeyboardBuilder()
     keyboard.add(InlineKeyboardButton(text="🔙 Главное меню", callback_data="main_menu"))
-    await callback.message.edit_text(rating_text, reply_markup=keyboard.as_markup(), parse_mode="HTML")
+    
+    try:
+        await callback.message.edit_text(rating_text, reply_markup=keyboard.as_markup(), parse_mode="HTML")
+    except Exception as e:
+        # Если HTML парсинг не удался, используем обычный текст
+        logger.warning(f"HTML parsing failed for rating: {e}")
+        # Убираем HTML теги из текста
+        rating_text_safe = rating_text.replace('<b>', '').replace('</b>', '')
+        await callback.message.edit_text(rating_text_safe, reply_markup=keyboard.as_markup())
 
 @router.callback_query(F.data.startswith("emp_menu_"))
 async def emp_menu(callback: types.CallbackQuery):
